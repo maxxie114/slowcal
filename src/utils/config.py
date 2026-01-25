@@ -24,9 +24,10 @@ class Config:
     SF_DATA_APP_TOKEN = os.getenv("SF_DATA_APP_TOKEN", "")
     
     # Nemotron/OpenAI Configuration
-    NEMOTRON_BASE_URL = os.getenv("NEMOTRON_BASE_URL", "https://integrate.api.nvidia.com/v1")
-    NEMOTRON_API_KEY = os.getenv("NEMOTRON_API_KEY", "")
-    NEMOTRON_MODEL = os.getenv("NEMOTRON_MODEL", "nvidia/nemotron-3-nano-30b-a3b")
+    # Default to local DGX Spark endpoint (can be overridden via .env)
+    NEMOTRON_BASE_URL = os.getenv("NEMOTRON_BASE_URL", "http://192.168.128.252:8000/v1")
+    NEMOTRON_API_KEY = os.getenv("NEMOTRON_API_KEY", "local-nemotron-key")  # Default for local DGX Spark
+    NEMOTRON_MODEL = os.getenv("NEMOTRON_MODEL", "nemotron-3-nano")
     
     # Data sources
     BUSINESS_LICENSE_DATASET = "rqzj-sfat"  # SF Business Registry
@@ -48,6 +49,10 @@ class Config:
     AGENT_SCRAPE_DELAY_SECONDS = 2
     AGENT_PAGE_TIMEOUT_SECONDS = 30
     AGENT_MAX_CONTENT_LENGTH = 5000
+    
+    # Yutori API Configuration
+    YUTORI_API_KEY = os.getenv("YUTORI_API_KEY", "")
+    YUTORI_API_BASE = "https://api.yutori.ai"
     
     @classmethod
     def ensure_directories(cls):

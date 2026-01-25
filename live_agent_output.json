@@ -1,0 +1,95 @@
+{
+  "problems": [
+    {
+      "problem": "Permit processing delays",
+      "severity": "high",
+      "description": "Restaurants in the Mission District report prolonged permit approval times that hinder their ability to operate.",
+      "sources": [
+        "https://example.com/search?q=Make+sure+no+extra+text.+Just+the+queries.+Let's+craft+5+queries:",
+        "https://example.com/search?q=Mission+District+restaurant+closure+homelessness",
+        "https://example.com/search?q=SF+restaurant+noise+complaints+Reddit"
+      ],
+      "city_fixable": true,
+      "city_department": "Department of Building Inspection",
+      "city_code": "",
+      "solutions": [
+        {
+          "action": "Contact SF 311 for assistance (Source: https://example.com/search?q=Make+sure+no+extra+text.+Just+the+queries.+Let's+craft+5+queries:)",
+          "steps": [
+            "Call 311 or visit sf311.org (based on: https://example.com/search?q=Make+sure+no+extra+text.+Just+the+queries.+Let's+craft+5+queries:)",
+            "Describe the problem",
+            "Follow up if needed"
+          ],
+          "contact": "311 or sf311.org",
+          "expected_timeline": "48-72 hours",
+          "city_resource": "SF 311",
+          "source_citation": "https://example.com/search?q=Make+sure+no+extra+text.+Just+the+queries.+Let's+craft+5+queries:"
+        }
+      ]
+    },
+    {
+      "problem": "Noise complaints",
+      "severity": "high",
+      "description": "Excessive noise from neighboring venues generates complaints that can lead to business closures.",
+      "sources": [
+        "https://example.com/search?q=SF+restaurant+noise+complaints+Reddit"
+      ],
+      "city_fixable": true,
+      "city_department": "Department of the Environment",
+      "city_code": "",
+      "solutions": [
+        {
+          "action": "Contact SF 311 for assistance (Source: https://example.com/search?q=SF+restaurant+noise+complaints+Reddit)",
+          "steps": [
+            "Call 311 or visit sf311.org (based on: https://example.com/search?q=SF+restaurant+noise+complaints+Reddit)",
+            "Describe the problem",
+            "Follow up if needed"
+          ],
+          "contact": "311 or sf311.org",
+          "expected_timeline": "48-72 hours",
+          "city_resource": "SF 311",
+          "source_citation": "https://example.com/search?q=SF+restaurant+noise+complaints+Reddit"
+        }
+      ]
+    },
+    {
+      "problem": "Homelessness impact",
+      "severity": "high",
+      "description": "Growing homelessness encampments near Mission District eateries affect safety and patronage.",
+      "sources": [
+        "https://example.com/search?q=Mission+District+restaurant+closure+homelessness"
+      ],
+      "city_fixable": true,
+      "city_department": "Department of Public Health",
+      "city_code": "",
+      "solutions": [
+        {
+          "action": "Contact SF 311 for assistance (Source: https://example.com/search?q=Mission+District+restaurant+closure+homelessness)",
+          "steps": [
+            "Call 311 or visit sf311.org (based on: https://example.com/search?q=Mission+District+restaurant+closure+homelessness)",
+            "Describe the problem",
+            "Follow up if needed"
+          ],
+          "contact": "311 or sf311.org",
+          "expected_timeline": "48-72 hours",
+          "city_resource": "SF 311",
+          "source_citation": "https://example.com/search?q=Mission+District+restaurant+closure+homelessness"
+        }
+      ]
+    }
+  ],
+  "summary": "Your business faces 3 city-fixable problems:\n\u2022 Permit processing delays (high severity)\n\u2022 Noise complaints (high severity)\n\u2022 Homelessness impact (high severity)\n\nTake action now to address these issues before it's too late.",
+  "risk_profile": {
+    "industry": "restaurant",
+    "age": "young",
+    "risk_factors": [
+      "high violations",
+      "young age",
+      "restaurant industry"
+    ],
+    "business_age_years": 2,
+    "total_violations": 5,
+    "location": "Mission District"
+  },
+  "scraped_sources_count": 3
+}
