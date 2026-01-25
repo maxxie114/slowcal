@@ -118,7 +118,7 @@ class BusinessProblemAgent:
         logger.info(f"Scraped {len(scraped_content)} sources")
         
         # Step 3: Extract problems using Nemotron
-        problems = self._extract_problems(scraped_content, risk_input)
+        problems = self._extract_problems(scraped_content, risk_input, scraped_content)
         logger.info(f"Extracted {len(problems)} problems")
         
         # Step 4: Generate solutions using Nemotron
@@ -310,7 +310,7 @@ Output: 5 queries, one per line, no numbering."""
         
         return text
     
-    def _extract_problems(self, scraped_content: List[Dict], risk_input: Dict) -> List[Dict]:
+    def _extract_problems(self, scraped_content: List[Dict], risk_input: Dict, original_scraped_content: List[Dict] = None) -> List[Dict]:
         """Extract specific problems from scraped content using Nemotron"""
         
         profile = risk_input.get("profile", {})
@@ -334,6 +334,7 @@ Extract problems that SF city departments can fix. For each:
 - Severity: high/medium/low
 - Department that can help
 - City code if mentioned
+- Source URLs from the scraped content
 
 JSON format:
 [
@@ -341,14 +342,16 @@ JSON format:
     "problem": "Brief problem name",
     "severity": "high|medium|low",
     "description": "1-2 sentence description",
-    "sources": ["URL1"],
+    "sources": ["URL1", "URL2"],
     "city_fixable": true,
     "city_department": "Department name",
     "city_code": "Code if available"
   }}
-]"""
+]
 
-        system_prompt = """Extract brief, city-fixable business problems. Keep descriptions short."""
+IMPORTANT: Include actual source URLs from the scraped content in the "sources" array."""
+
+        system_prompt = """Extract brief, city-fixable business problems. Keep descriptions short. Always include source URLs from the scraped content."""
 
         response = self.client.generate_structured(
             prompt,
@@ -362,6 +365,22 @@ JSON format:
             problems = json.loads(response)
             if not isinstance(problems, list):
                 problems = [problems]
+            
+            # Ensure sources are included - add from scraped_content if missing
+            source_list = original_scraped_content if original_scraped_content else scraped_content
+            for problem in problems:
+                if not problem.get('sources') or len(problem.get('sources', [])) == 0:
+                    # Try to find matching source URLs from scraped content
+                    problem_text = problem.get('problem', '').lower()
+                    matching_sources = [
+                        item['url'] for item in source_list[:10]
+                        if any(word in item.get('content', '').lower() for word in problem_text.split()[:3])
+                    ]
+                    if matching_sources:
+                        problem['sources'] = matching_sources[:2]
+                    else:
+                        problem['sources'] = [item['url'] for item in source_list[:2] if item.get('url')]
+            
             return problems
         except json.JSONDecodeError:
             # Fallback: try to extract JSON from response
@@ -385,38 +404,44 @@ JSON format:
             if not problem.get("city_fixable", False):
                 continue
             
+            sources_list = problem.get('sources', [])
+            sources_text = ", ".join(sources_list[:3]) if sources_list else "No sources available"
+            
             prompt = f"""Generate SHORT, actionable solutions for this SF business problem:
 
 Problem: {problem.get('problem', '')}
 Department: {problem.get('city_department', '')}
+Sources: {sources_text}
 
 Keep solutions BRIEF:
 - Action: One sentence
 - Steps: 3-4 bullet points max (short)
 - Contact: Phone/website only
 - Timeline: Brief estimate
+- MUST cite sources in the action or steps
 
 JSON:
 {{
   "problem": "{problem.get('problem', '')}",
   "severity": "{problem.get('severity', 'high')}",
   "description": "{problem.get('description', '')[:100]}",
-  "sources": {problem.get('sources', [])},
+  "sources": {sources_list},
   "city_fixable": true,
   "city_department": "{problem.get('city_department', '')}",
   "city_code": "{problem.get('city_code', 'N/A')}",
   "solutions": [
     {{
-      "action": "One sentence action",
-      "steps": ["Brief step 1", "Brief step 2", "Brief step 3"],
+      "action": "One sentence action (cite source if relevant)",
+      "steps": ["Brief step 1 (cite source)", "Brief step 2", "Brief step 3"],
       "contact": "Phone or website",
       "expected_timeline": "Brief timeline",
-      "city_resource": "Resource name"
+      "city_resource": "Resource name",
+      "source_citation": "Primary source URL or reference"
     }}
   ]
 }}"""
 
-            system_prompt = """Generate brief, actionable solutions with contact info. Keep steps short (3-4 bullets max)."""
+            system_prompt = """Generate brief, actionable solutions with contact info. Keep steps short (3-4 bullets max). Always cite sources when referencing information."""
 
             response = self.client.generate_structured(
                 prompt,
@@ -431,13 +456,20 @@ JSON:
                 problem.update(solution_data)
                 solutions.append(problem)
             except json.JSONDecodeError:
-                # Fallback: add basic solution structure
+                # Fallback: add basic solution structure with source citation
+                sources_list = problem.get('sources', [])
+                source_citation = sources_list[0] if sources_list else "General SF city resources"
                 problem["solutions"] = [{
-                    "action": "Contact SF 311 for assistance",
-                    "steps": ["Call 311 or visit sf311.org", "Describe the problem", "Follow up if needed"],
+                    "action": f"Contact SF 311 for assistance (Source: {source_citation})",
+                    "steps": [
+                        f"Call 311 or visit sf311.org (based on: {source_citation})",
+                        "Describe the problem",
+                        "Follow up if needed"
+                    ],
                     "contact": "311 or sf311.org",
                     "expected_timeline": "48-72 hours",
-                    "city_resource": "SF 311"
+                    "city_resource": "SF 311",
+                    "source_citation": source_citation
                 }]
                 solutions.append(problem)
         
@@ -469,6 +501,14 @@ Format as bullet points:
         system_prompt = """Generate a brief bullet-point summary (3-4 bullets max)."""
 
         summary = self.client.generate(prompt, system_prompt=system_prompt, temperature=0.7, max_tokens=500)
+        
+        # Fallback if summary generation fails
+        if not summary or summary.startswith("Error:"):
+            problems_list = "\n".join([
+                f"• {p.get('problem', 'Unknown')} ({p.get('severity', 'unknown')} severity)"
+                for p in solutions[:3]
+            ])
+            return f"""Your business faces {len(solutions)} city-fixable problems:\n{problems_list}\n\nTake action now to address these issues before it's too late."""
         
         return summary
 

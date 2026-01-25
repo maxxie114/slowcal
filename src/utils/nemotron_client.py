@@ -63,7 +63,11 @@ class NemotronClient:
                 stream=False
             )
             
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            if content is None:
+                logger.warning("Nemotron returned None content")
+                return ""
+            return content.strip()
         
         except Exception as e:
             logger.error(f"Error generating text with Nemotron: {e}")
