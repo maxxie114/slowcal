@@ -3,7 +3,7 @@ Compliance advisor for city regulations and requirements
 """
 
 from typing import Dict, List
-from ..utils.nemotron_client import NemotronClient
+from utils.nemotron_client import NemotronClient
 import logging
 
 logger = logging.getLogger(__name__)

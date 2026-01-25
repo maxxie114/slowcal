@@ -4,7 +4,7 @@ Risk alert system for business failure warnings
 
 import pandas as pd
 from typing import List, Dict
-from ..utils.config import Config
+from utils.config import Config
 import logging
 
 logger = logging.getLogger(__name__)

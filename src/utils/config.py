@@ -15,7 +15,7 @@ class Config:
     PROCESSED_DATA_DIR = DATA_DIR / "processed"
     MODELS_DIR = DATA_DIR / "models"
     
-    # SF.gov Open Data API
+    # SF.gov Open Data API (Socrata SODA v2.1 resource endpoint)
     SF_DATA_API_BASE = "https://data.sfgov.org/resource"
     SF_DATA_APP_TOKEN = os.getenv("SF_DATA_APP_TOKEN", "")
     
@@ -24,10 +24,10 @@ class Config:
     NEMOTRON_API_KEY = os.getenv("NEMOTRON_API_KEY", "local-nemotron-key")
     NEMOTRON_MODEL = os.getenv("NEMOTRON_MODEL", "nvidia/nemotron-4-340b-instruct")
     
-    # Data sources
-    BUSINESS_LICENSE_DATASET = "rqzj-sfat"  # SF Business Registry
-    PERMITS_DATASET = "p4e4-5k3y"  # Building Permits
-    COMPLAINTS_DATASET = "ktji-gkfc"  # Code Enforcement Complaints
+    # Data sources (Socrata dataset identifiers)
+    BUSINESS_LICENSE_DATASET = "g8m3-pdis"  # Registered Business Locations - San Francisco
+    PERMITS_DATASET = "i98e-djp9"  # Building Permits
+    COMPLAINTS_DATASET = "vw6y-z8j6"  # 311 Cases (includes code-enforcement complaints)
     
     # ML Model settings
     RISK_MODEL_VERSION = "v1.0"
