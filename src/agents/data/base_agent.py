@@ -61,8 +61,20 @@ class BaseDataAgent(ABC):
     
     VERSION = "0.1"
     
-    def __init__(self, socrata_client: SocrataClient = None):
-        self.client = socrata_client or SocrataClient()
+    def __init__(self, socrata_client: SocrataClient = None, use_synthetic: bool = False, use_supabase: bool = False):
+        from tools.synthetic_client import SyntheticClient
+        from tools.supabase_evidence_client import SupabaseEvidenceClient
+        
+        self.use_synthetic = use_synthetic
+        self.use_supabase = use_supabase
+        
+        if use_synthetic:
+            self.client = SyntheticClient()
+        elif use_supabase:
+            self.client = SupabaseEvidenceClient()
+        else:
+            self.client = socrata_client or SocrataClient()
+            
         self._evidence_counter = 0
     
     @property

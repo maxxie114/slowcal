@@ -190,21 +190,26 @@ class CaseManagerAgent:
         self.nim_client = nim_client or NIMClient(timeout=300.0)  # 5 min timeout for DGX
         self.max_workers = max_workers
         self.enable_llm_agents = enable_llm_agents
+        self.use_synthetic = False
+        self.use_supabase = False  # New flag
         self.validator = SchemaValidator()
         
         # Initialize agents
         self._init_agents()
     
-    def _init_agents(self):
+    def _init_agents(self, use_synthetic: bool = False, use_supabase: bool = False):
         """Initialize all specialist agents"""
+        self.use_synthetic = use_synthetic
+        self.use_supabase = use_supabase
+        
         # Data agents
-        self.business_registry_agent = BusinessRegistryAgent()
-        self.permits_agent = PermitsAgent()
-        self.complaints_311_agent = Complaints311Agent()
-        self.dbi_complaints_agent = DBIComplaintsAgent()
-        self.sfpd_incidents_agent = SFPDIncidentsAgent()
-        self.evictions_agent = EvictionsAgent()
-        self.vacancy_agent = VacancyCorridorAgent()
+        self.business_registry_agent = BusinessRegistryAgent(use_synthetic=use_synthetic, use_supabase=use_supabase)
+        self.permits_agent = PermitsAgent(use_synthetic=use_synthetic, use_supabase=use_supabase)
+        self.complaints_311_agent = Complaints311Agent(use_synthetic=use_synthetic, use_supabase=use_supabase)
+        self.dbi_complaints_agent = DBIComplaintsAgent(use_synthetic=use_synthetic, use_supabase=use_supabase)
+        self.sfpd_incidents_agent = SFPDIncidentsAgent(use_synthetic=use_synthetic, use_supabase=use_supabase)
+        self.evictions_agent = EvictionsAgent(use_synthetic=use_synthetic, use_supabase=use_supabase)
+        self.vacancy_agent = VacancyCorridorAgent(use_synthetic=use_synthetic, use_supabase=use_supabase)
         
         # Identity agents
         self.address_normalize_agent = AddressNormalizeAgent()
@@ -252,6 +257,13 @@ class CaseManagerAgent:
             horizon_months=horizon_months,
             options=options or {},
         )
+        
+        # Re-initialize agents if mode changed
+        use_synthetic = context.options.get("use_synthetic", False)
+        use_supabase = context.options.get("use_supabase", False)
+        
+        if use_synthetic != self.use_synthetic or use_supabase != self.use_supabase:
+            self._init_agents(use_synthetic=use_synthetic, use_supabase=use_supabase)
         
         # Parse business query to separate name and address
         parsed = self._parse_business_query(business_query)
@@ -402,6 +414,9 @@ class CaseManagerAgent:
             primary = result_dict.get('primary') or result_dict.get('signals', {}).get('primary')
             if primary:
                 logger.info(f"Primary business match: {primary.get('business_name')} at {primary.get('address')}")
+                # Update context if we found a good match to help other agents
+                if not context.business_address and primary.get('address'):
+                    context.business_address = primary.get('address')
             debug_print(f"business_registry returned (records/count: {record_count})", "business_registry", "receive")
         except Exception as e:
             logger.warning(f"business_registry agent failed: {e}")

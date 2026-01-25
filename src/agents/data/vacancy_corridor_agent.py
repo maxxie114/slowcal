@@ -68,8 +68,8 @@ class VacancyCorridorAgent(BaseDataAgent):
     def dataset_id(self) -> str:
         return Config.TAXABLE_COMMERCIAL_SPACES_DATASET  # rzkk-54yv
     
-    def __init__(self):
-        super().__init__()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self._local_data: Optional[List[Dict]] = None
         self._load_local_data()
     
