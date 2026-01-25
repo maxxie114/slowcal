@@ -47,18 +47,25 @@ export function BusinessCard({ business }: BusinessCardProps) {
                 </div>
 
                 <p className="text-gray-500 text-sm line-clamp-1">
-                    {business.neighborhood} · {business.category}
+                    {business.neighborhood}
                 </p>
+                {business.address && (
+                    <p className="text-gray-400 text-xs line-clamp-1">
+                        {business.address}
+                    </p>
+                )}
 
-                {/* Keep RiskIndicator for now as a more detailed view or replace? 
-                     Airbnb shows price here. We could show 'Risk Score' or just a tagline.
-                     Let's show the tagline as "Available dates" equivalent (gray text) 
-                 */}
-                <p className="text-gray-500 text-sm line-clamp-1">
+                <p className="text-gray-500 text-sm line-clamp-1 mt-1">
                     {business.tagline}
                 </p>
+                
+                {business.businessAge ? (
+                    <p className="text-xs text-gray-400">
+                        {business.businessAge} years in business
+                    </p>
+                ) : null}
 
-                <div className="mt-1 flex items-baseline gap-1">
+                <div className="mt-2 flex items-baseline gap-1">
                     <span className="font-semibold text-black">
                         {business.riskScore}%
                     </span>

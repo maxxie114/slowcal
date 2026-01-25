@@ -4,18 +4,46 @@ import { PolaroidImage } from "@/components/ui/PolaroidImage";
 import { RiskIndicator } from "@/components/ui/RiskIndicator";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import { cn } from "@/lib/utils";
-import { mockBusinesses } from "@/lib/mockData";
 import { notFound } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { Business } from "@/lib/types";
 
-export default function BusinessProfilePage({ params }: { params: { id: string } }) {
-    const business = mockBusinesses.find(b => b.id === params.id);
+export default async function BusinessProfilePage({ params }: { params: { id: string } }) {
+    let business: Business | undefined;
+
+    // Fetch directly from Supabase
+    const { data, error } = await supabase
+        .from('master_model_data')
+        .select('*')
+        .eq('id', params.id)
+        .single();
+    
+    if (data) {
+            business = {
+            id: data.id.toString(),
+            name: data.dba_name || data.ownership_name || "Unknown Business",
+            category: 'other',
+            neighborhood: data.neighborhood || "Unknown Neighborhood",
+            address: data.full_business_address || "",
+            lat: data.latitude ? parseFloat(data.latitude) : 37.7749,
+            lng: data.longitude ? parseFloat(data.longitude) : -122.4194,
+            photoUrl: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&q=80&w=800",
+            riskScore: Math.round((data.risk_score || 0) * 100),
+            riskLevel: data.risk_level?.toLowerCase() === 'high' ? 'high' : 'critical',
+            tagline: data.naic_code_description || "Local Business",
+            story: "", 
+            businessAge: data.business_age
+        };
+    }
 
     if (!business) {
         return notFound();
     }
 
     // Default data for fields not in the main data source yet
-    const tags = [business.category, business.neighborhood, "Local Favorite"];
+    const tags = [business.category, business.neighborhood];
+    if (business.tagline) tags.push(business.tagline.slice(0, 20) + (business.tagline.length > 20 ? '...' : ''));
+
     const riskReason = business.riskLevel === 'critical' 
         ? "Facing immediate displacement pressure due to significant rent increases."
         : business.riskLevel === 'high'
@@ -24,34 +52,25 @@ export default function BusinessProfilePage({ params }: { params: { id: string }
         ? "Steady business but operating on thin margins."
         : "Currently stable but needs community support to thrive.";
     
-    const hours = "Open Daily: 10:00 AM - 7:00 PM";
+    // We don't have real hours yet, so we shouldn't show fake ones.
+    const hours = null; 
+
+    const destinationQuery = business.address && business.address.trim().length > 0
+        ? encodeURIComponent(business.address)
+        : `${business.lat},${business.lng}`;
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`;
+    const appleMapsUrl = `https://maps.apple.com/?daddr=${destinationQuery}`;
     
     // Use the tagline as the intro to the story if story is missing
-    const story = business.story || `
-        ${business.tagline}
-        
-        ${business.name} has been a staple of the ${business.neighborhood} community. We take pride in serving our neighbors and visitors alike.
-        
-        "We love this neighborhood," says the owner. "It's our home, and we want to keep serving our community for years to come."
-        
-        Your support helps us keep our doors open and our traditions alive.
-    `;
+    const story = business.story || "";
 
-    // Default reviews
-    const reviews = [
-        { id: 1, user: "Alex M.", rating: 5, date: "2 days ago", text: "Such a gem! I love coming here." },
-        { id: 2, user: "Jamie L.", rating: 5, date: "1 week ago", text: "Great service and amazing quality. Highly recommend." },
-        { id: 3, user: "Sam K.", rating: 4, date: "2 weeks ago", text: "A classic spot in the neighborhood. Always reliable." },
-    ];
+    // No fake reviews
+    const reviews: any[] = [];
 
-    // Ensure we have 3 images for the gallery
-    const displayImages = business.gallery && business.gallery.length >= 3 
-        ? business.gallery.slice(0, 3) 
-        : [
-            { src: business.photoUrl, alt: business.name, caption: "Storefront" },
-            { src: business.photoUrl, alt: business.name, caption: "Interior" },
-            { src: business.photoUrl, alt: business.name, caption: "Details" }
-        ];
+    // Only show gallery if we have actual unique images, otherwise just show the main one nicely
+    // Since we only have a placeholder photoUrl currently, we should just show that one main image
+    // instead of pretending we have a gallery of 3 identical images.
+    const displayImages = [{ src: business.photoUrl, alt: business.name, caption: "Storefront" }];
 
     return (
         <main className="min-h-screen pb-32 bg-paper-cream">
@@ -64,26 +83,17 @@ export default function BusinessProfilePage({ params }: { params: { id: string }
             </div>
 
             <div className="max-w-4xl mx-auto px-4 md:px-8">
-                {/* Gallery Section */}
-                <div className="relative py-8 md:py-12 mb-8">
-                    <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-12 pl-4">
-                        {displayImages.map((img, idx) => (
-                            <div key={idx} className={cn(
-                                "transition-transform hover:z-20",
-                                idx === 0 && "-rotate-6 md:-translate-x-4",
-                                idx === 1 && "rotate-3 z-10",
-                                idx === 2 && "-rotate-3 md:translate-x-4",
-                            )}>
-                                <PolaroidImage
-                                    src={img.src}
-                                    alt={img.alt}
-                                    caption={img.caption}
-                                    rotation="none" // We handle rotation in parent for the composition
-                                    className="w-full h-full object-cover"
-                                    fill
-                                />
-                            </div>
-                        ))}
+                {/* Single Hero Image (since we don't have a gallery) */}
+                <div className="relative py-8 md:py-12 mb-8 flex justify-center">
+                    <div className="w-full max-w-md transform rotate-1 transition-transform hover:rotate-0 hover:scale-[1.02] duration-500">
+                        <PolaroidImage
+                            src={displayImages[0].src}
+                            alt={displayImages[0].alt}
+                            caption={displayImages[0].caption}
+                            rotation="none"
+                            className="w-full aspect-[4/3] object-cover"
+                            fill
+                        />
                     </div>
                 </div>
 
@@ -112,22 +122,34 @@ export default function BusinessProfilePage({ params }: { params: { id: string }
                     </div>
                 </div>
 
-                {/* Story Section */}
+                {/* Story Section - Only show if we have content or at least a description */}
+                {(story || business.tagline) && (
                 <div className="relative max-w-2xl mx-auto mb-16">
                     <TapeStrip variant="corner-tl" className="-left-4 -top-4 w-32 opacity-80" />
                     <TapeStrip variant="corner-br" className="-right-4 -bottom-4 w-32 opacity-80" />
 
                     <div className="bg-paper-white p-8 md:p-12 shadow-paper rotate-[0.5deg]">
-                        <h2 className="font-script text-3xl text-ink-medium mb-6">Our Story</h2>
+                        <h2 className="font-script text-3xl text-ink-medium mb-6">About Us</h2>
                         <div className="prose prose-stone prose-lg font-serif leading-relaxed text-ink-medium">
-                            {story.split('\n').map((paragraph, i) => (
-                                paragraph.trim() && <p key={i} className="mb-4">{paragraph}</p>
-                            ))}
+                            {story ? (
+                                story.split('\n').map((paragraph, i) => (
+                                    paragraph.trim() && <p key={i} className="mb-4">{paragraph}</p>
+                                ))
+                            ) : (
+                                <p className="mb-4">{business.tagline}</p>
+                            )}
+                            {business.businessAge && (
+                                <p className="text-sm text-stone-500 mt-6 border-t pt-4 border-stone-100">
+                                    Serving the community for {business.businessAge} years.
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>
+                )}
 
-                {/* Reviews Section */}
+                {/* Reviews Section - Hidden if no reviews */}
+                {reviews.length > 0 && (
                 <div className="max-w-2xl mx-auto mb-20">
                     <h3 className="font-script text-2xl text-ink-light mb-6 text-center">Community Love</h3>
                     <div className="space-y-4">
@@ -149,6 +171,7 @@ export default function BusinessProfilePage({ params }: { params: { id: string }
                         ))}
                     </div>
                 </div>
+                )}
             </div>
 
             {/* Sticky Bottom Actions */}
@@ -159,16 +182,33 @@ export default function BusinessProfilePage({ params }: { params: { id: string }
                             <MapPin className="w-4 h-4 text-risk-medium" />
                             <span>{business.address}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-ink-light" />
-                            <span>{hours}</span>
-                        </div>
+                        {hours && (
+                            <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-ink-light" />
+                                <span>{hours}</span>
+                            </div>
+                        )}
                     </div>
 
-                    <button className="w-full md:w-auto bg-ink-dark text-paper-white px-8 py-3 rounded-full font-medium hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-lg">
-                        <Navigation className="w-4 h-4" />
-                        Get Directions
-                    </button>
+                    <div className="flex w-full md:w-auto items-center gap-3">
+                        <a
+                            href={googleMapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full md:w-auto bg-ink-dark text-paper-white px-8 py-3 rounded-full font-medium hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-lg"
+                        >
+                            <Navigation className="w-4 h-4" />
+                            Get Directions
+                        </a>
+                        <a
+                            href={appleMapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-ink-medium underline underline-offset-4 hover:text-ink-dark"
+                        >
+                            Apple Maps
+                        </a>
+                    </div>
                 </div>
             </div>
         </main>
