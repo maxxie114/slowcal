@@ -4,7 +4,7 @@ Fee analysis for city permits and licenses
 
 import pandas as pd
 from typing import Dict, List, Optional
-from ..utils.config import Config
+from utils.config import Config
 import logging
 
 logger = logging.getLogger(__name__)

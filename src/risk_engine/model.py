@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, roc_auc_score
 import joblib
 from pathlib import Path
-from ..utils.config import Config
+from utils.config import Config
 import logging
 from typing import Dict, Tuple, Optional
 

@@ -5,7 +5,7 @@ Market analysis for lease negotiation intelligence
 import pandas as pd
 import numpy as np
 from typing import Dict, List
-from ..utils.config import Config
+from utils.config import Config
 import logging
 
 logger = logging.getLogger(__name__)
