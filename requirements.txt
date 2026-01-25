@@ -1,31 +1,36 @@
-# Core dependencies
-pandas>=2.0.0
-numpy>=1.24.0
-scikit-learn>=1.3.0
+# Pinned dependencies for the SlowCal backend (derived from your sjsu environment.yml)
+# These versions are the ones you've been running locally and that the backend is known to work with.
 
-# Streamlit for UI
-streamlit>=1.28.0
-plotly>=5.17.0
+# Web / API
+fastapi==0.120.4
+uvicorn==0.38.0
+starlette==0.49.3
 
-# Data processing
-pyarrow>=12.0.0  # For parquet support
-requests>=2.31.0
+# Pydantic (core + python API)
+pydantic==2.12.3
+pydantic-core==2.41.4
 
-# OpenAI client for Nemotron
-openai>=1.3.0
+# Data science / ML
+numpy==1.26.3
+pandas==2.3.3
+scikit-learn==1.7.2
+joblib==1.5.2
+pyarrow==12.0.1
 
-# Visualization
-matplotlib>=3.7.0
-seaborn>=0.12.0
+# HTTP / utilities
+requests==2.32.5
+python-dotenv==1.2.1
 
-# Jupyter for notebooks
-jupyter>=1.0.0
-ipykernel>=6.25.0
+# OpenAI client (used by nemotron client wrappers)
+openai==2.8.0
 
-# Utilities
-python-dotenv>=1.0.0
+# Optional / tooling used by some agents
+playwright==1.56.0
+beautifulsoup4==4.14.2
+lxml==6.0.2
 
-# Web scraping
-playwright>=1.40.0
-beautifulsoup4>=4.12.0
-lxml>=4.9.0
+# Notes:
+# - These pins were chosen to match your `environment.yml` pip entries so the sjsu env is reproducible for cloud deploy.
+# - After installing, run `npx playwright install` (or `playwright install`) if you rely on Playwright browser automation.
+# - If deploying to a container (Docker) you may prefer to install most heavy lower-level packages via conda in the image
+#   and keep pip for Python-only packages; I can help create a minimal Dockerfile if you'd like.

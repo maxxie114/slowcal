@@ -1,0 +1,16 @@
+<svg width="600" height="200" viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" stroke="#2D3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Golden Gate Bridge -->
+    <path d="M 50 150 L 50 50 L 150 50 L 150 150" /> <!-- Tower 1 -->
+    <path d="M 250 150 L 250 50 L 350 50 L 350 150" /> <!-- Tower 2 -->
+    <path d="M 0 100 Q 150 180 300 100 T 600 100" /> <!-- Cable -->
+    
+    <!-- Victorian Houses -->
+    <path d="M 400 150 L 400 100 L 425 80 L 450 100 L 450 150" />
+    <path d="M 450 150 L 450 110 L 475 90 L 500 110 L 500 150" />
+    <path d="M 500 150 L 500 100 L 525 80 L 550 100 L 550 150" />
+    
+    <!-- Hills -->
+    <path d="M 0 180 Q 300 140 600 180" stroke="#718096" stroke-width="1" />
+  </g>
+</svg>

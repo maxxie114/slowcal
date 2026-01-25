@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "evidence_pack.json",
+  "title": "EvidencePack",
+  "description": "Compact evidence package for LLM context - contains only what the LLM needs to generate grounded responses",
+  "type": "object",
+  "required": ["entity_summary", "risk_score", "risk_band", "top_drivers", "as_of", "horizon_months"],
+  "properties": {
+    "entity_summary": {
+      "type": "string",
+      "description": "Brief summary of the business entity"
+    },
+    "risk_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Deterministic risk score from ML model"
+    },
+    "risk_band": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "Risk classification band"
+    },
+    "top_drivers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["driver", "direction"],
+        "properties": {
+          "driver": {
+            "type": "string",
+            "description": "Name of the risk driver"
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["up", "down", "stable"],
+            "description": "Direction of change"
+          },
+          "contribution": {
+            "type": "number",
+            "description": "Relative contribution to risk score"
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "References to supporting evidence"
+          }
+        }
+      },
+      "description": "Top risk drivers with evidence"
+    },
+    "signal_summaries": {
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "description": "Key signals summarized by category (permits, 311, etc.)"
+    },
+    "evidence_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "content"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique evidence ID (e.g., 'e:311-001')"
+          },
+          "content": {
+            "type": "string",
+            "description": "Evidence content/summary"
+          },
+          "source": {
+            "type": "string",
+            "description": "Data source (e.g., 'complaints_311')"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Date of the evidence"
+          }
+        }
+      },
+      "description": "Evidence snippets with IDs that can be referenced"
+    },
+    "data_gaps": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Known data gaps or missing information"
+    },
+    "confidence_notes": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Notes about confidence levels and uncertainty"
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Reference timestamp for the analysis"
+    },
+    "horizon_months": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 24,
+      "description": "Forecast horizon in months"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-paper-cream text-ink-medium font-sans;
+    background-image: url('/textures/paper-grid.svg');
+    background-size: 24px 24px;
+    background-repeat: repeat;
+  }
+}
+
+@layer utilities {
+  .tape {
+    @apply absolute bg-tape-gradient shadow-tape opacity-90 rounded-[1px];
+    background-size: 4px 4px;
+    z-index: 10;
+  }
+
+  /* Helper to make tape look realistic with jagged edges if we wanted, 
+     but for now just the texture and rotation is key */
+}
+
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
