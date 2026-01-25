@@ -41,9 +41,22 @@ class ModelFeatures:
             "missing_features": self.missing_features,
         }
     
+    # Mapping from trained model feature names to feature builder feature names
+    FEATURE_ALIASES = {
+        "business_age": "business_age_years",
+        "neighborhood_permits": "permit_count_6m",
+        "avg_permit_cost": "avg_permit_cost_12m",
+        "neighborhood_311_cases": "complaint_count_6m",
+    }
+    
     def to_array(self, feature_order: List[str]) -> List[float]:
-        """Convert to ordered array for model input"""
-        return [self.features.get(f, 0.0) for f in feature_order]
+        """Convert to ordered array for model input, handling feature name aliases"""
+        result = []
+        for f in feature_order:
+            # Check if this is an alias that needs to be mapped
+            actual_name = self.FEATURE_ALIASES.get(f, f)
+            result.append(self.features.get(actual_name, 0.0))
+        return result
 
 
 class FeatureBuilderAgent:
