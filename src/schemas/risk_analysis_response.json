@@ -1,0 +1,214 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "risk_analysis_response.json",
+  "title": "RiskAnalysisResponse",
+  "description": "Complete risk analysis response from the multi-agent pipeline",
+  "type": "object",
+  "required": ["case_id", "as_of", "horizon_months", "entity", "risk", "signals", "strategy", "audit"],
+  "properties": {
+    "case_id": {
+      "type": "string",
+      "description": "Unique identifier for this analysis case"
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Reference timestamp for the analysis"
+    },
+    "horizon_months": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 24,
+      "default": 6,
+      "description": "Forecast horizon in months"
+    },
+    "entity": {
+      "$ref": "#/definitions/ResolvedEntity"
+    },
+    "risk": {
+      "$ref": "#/definitions/RiskResult"
+    },
+    "signals": {
+      "$ref": "#/definitions/AllSignals"
+    },
+    "strategy": {
+      "$ref": "#/definitions/StrategyPlan"
+    },
+    "limitations": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Known limitations and caveats"
+    },
+    "audit": {
+      "$ref": "#/definitions/AuditInfo"
+    }
+  },
+  "definitions": {
+    "ResolvedEntity": {
+      "type": "object",
+      "required": ["entity_id", "business_name", "address", "match_confidence"],
+      "properties": {
+        "entity_id": {"type": "string"},
+        "business_name": {"type": "string"},
+        "address": {"type": "string"},
+        "neighborhood": {"type": "string"},
+        "latitude": {"type": "number"},
+        "longitude": {"type": "number"},
+        "match_confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "join_strategy": {
+          "type": "string",
+          "enum": ["exact_address", "spatial_radius", "neighborhood_aggregate"]
+        }
+      }
+    },
+    "RiskResult": {
+      "type": "object",
+      "required": ["score", "band", "model_version"],
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "band": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "model_version": {"type": "string"},
+        "top_drivers": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/RiskDriver"}
+        }
+      }
+    },
+    "RiskDriver": {
+      "type": "object",
+      "required": ["driver", "direction"],
+      "properties": {
+        "driver": {"type": "string"},
+        "direction": {
+          "type": "string",
+          "enum": ["up", "down", "stable"]
+        },
+        "contribution": {"type": "number"},
+        "evidence_refs": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "AllSignals": {
+      "type": "object",
+      "properties": {
+        "permits": {"$ref": "#/definitions/SignalSet"},
+        "complaints_311": {"$ref": "#/definitions/SignalSet"},
+        "dbi": {"$ref": "#/definitions/SignalSet"},
+        "sfpd": {"$ref": "#/definitions/SignalSet"},
+        "evictions": {"$ref": "#/definitions/SignalSet"},
+        "vacancy": {"$ref": "#/definitions/SignalSet"}
+      }
+    },
+    "SignalSet": {
+      "type": "object",
+      "properties": {
+        "count_3m": {"type": "integer"},
+        "count_6m": {"type": "integer"},
+        "count_12m": {"type": "integer"},
+        "trend": {
+          "type": "string",
+          "enum": ["up", "down", "stable"]
+        },
+        "top_categories": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "data_gaps": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "StrategyPlan": {
+      "type": "object",
+      "required": ["summary", "actions"],
+      "properties": {
+        "summary": {"type": "string"},
+        "actions": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/StrategyAction"}
+        },
+        "questions_for_user": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "StrategyAction": {
+      "type": "object",
+      "required": ["horizon", "action", "why", "expected_impact", "effort"],
+      "properties": {
+        "horizon": {
+          "type": "string",
+          "enum": ["2_weeks", "60_days", "6_months"]
+        },
+        "action": {"type": "string"},
+        "why": {"type": "string"},
+        "expected_impact": {
+          "type": "string",
+          "enum": ["low", "med", "high"]
+        },
+        "effort": {
+          "type": "string",
+          "enum": ["low", "med", "high"]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "success_metric": {"type": "string"}
+      }
+    },
+    "AuditInfo": {
+      "type": "object",
+      "required": ["data_pulled_at", "qa_status"],
+      "properties": {
+        "data_pulled_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dataset_versions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "dataset_id": {"type": "string"},
+              "pulled_at": {"type": "string", "format": "date-time"}
+            }
+          }
+        },
+        "agent_versions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "agent": {"type": "string"},
+              "version": {"type": "string"}
+            }
+          }
+        },
+        "qa_status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL"]
+        }
+      }
+    }
+  }
+}
