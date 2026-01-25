@@ -52,7 +52,10 @@ class Config:
     
     # Yutori API Configuration
     YUTORI_API_KEY = os.getenv("YUTORI_API_KEY", "")
-    YUTORI_API_BASE = "https://api.yutori.ai"
+    YUTORI_API_BASE = "https://api.yutori.com/v1"
+    
+    # Gemini API Configuration (for web search grounding)
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     
     @classmethod
     def ensure_directories(cls):

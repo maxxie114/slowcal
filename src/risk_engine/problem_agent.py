@@ -1,5 +1,5 @@
 """
-Business Problem Agent - Scrapes external sources to find specific problems
+Business Problem Agent - Uses Gemini with web search to find specific problems
 and generates actionable solutions with SF city department contacts
 """
 
@@ -8,7 +8,6 @@ import time
 import logging
 import re
 from typing import Dict, List, Optional
-from playwright.sync_api import sync_playwright, Browser, Page
 from bs4 import BeautifulSoup
 import requests
 from ..utils.nemotron_client import NemotronClient
@@ -70,21 +69,29 @@ class BusinessProblemAgent:
             nemotron_client: Optional NemotronClient instance
         """
         self.client = nemotron_client or NemotronClient()
-        self.browser: Optional[Browser] = None
-        self.playwright = None
+        self.gemini_client = None
+        self._init_gemini()
+        
+    def _init_gemini(self):
+        """Initialize Gemini client for web search"""
+        try:
+            if Config.GEMINI_API_KEY:
+                from google import genai
+                self.gemini_client = genai.Client(api_key=Config.GEMINI_API_KEY)
+                logger.info("Gemini client initialized for web search")
+            else:
+                logger.warning("GEMINI_API_KEY not configured, web search will use fallback")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Gemini: {e}")
+            self.gemini_client = None
         
     def __enter__(self):
         """Context manager entry"""
-        self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(headless=True)
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
-        if self.browser:
-            self.browser.close()
-        if self.playwright:
-            self.playwright.stop()
+        pass
     
     def analyze_business_risk(self, risk_input: Dict) -> Dict:
         """
@@ -176,7 +183,10 @@ Generate 5 queries now, one per line:"""
         # Parse queries (one per line) and filter out reasoning/instruction text
         all_lines = response.split('\n')
         queries = []
-        reasoning_keywords = ['we need', 'let me', 'i should', 'output', 'generate', 'provide', 'ensure', 'must', 'should', 'example', 'format']
+        # Extended list of reasoning keywords to filter out
+        reasoning_keywords = ['we need', 'let me', 'i should', 'output', 'generate', 'provide', 'ensure', 
+                             'must', 'should', 'example', 'format', 'let\'s', 'craft', 'make sure', 
+                             'here are', 'here is', 'following', 'note:', 'query', 'search for', 'single line']
         
         for line in all_lines:
             line = line.strip()
@@ -184,21 +194,25 @@ Generate 5 queries now, one per line:"""
             if (line and 
                 not line.startswith('#') and 
                 not re.match(r'^\d+[\.\)]\s*', line) and  # Skip numbered items
-                len(line) > 10 and  # Must be substantial
-                len(line) < 150 and  # Not too long
+                len(line) > 15 and  # Must be substantial (increased from 10)
+                len(line) < 100 and  # Not too long (reduced from 150)
                 not any(keyword in line.lower() for keyword in reasoning_keywords) and
-                not line.startswith(('Output', 'Generate', 'Provide', 'Format', 'Example'))):
+                not line.startswith(('Output', 'Generate', 'Provide', 'Format', 'Example', 'Let', 'Make', 'Here')) and
+                ':' not in line):  # Skip lines with colons (likely instructions)
                 # Clean up: remove quotes, bullets, etc.
                 line = re.sub(r'^["\'•\-\*]\s*', '', line)  # Remove leading quotes/bullets
                 line = re.sub(r'\s*["\']$', '', line)  # Remove trailing quotes
                 line = line.strip()
-                if line and len(line.split()) >= 3:  # At least 3 words
+                # Must have at least 3 words and contain location-related terms
+                words = line.split()
+                if (len(words) >= 3 and 
+                    any(loc in line.lower() for loc in ['sf', 'san francisco', 'mission', 'soma', 'downtown'])):
                     queries.append(line)
         
         # If we didn't get enough queries, try to extract from the response more aggressively
         if len(queries) < 3:
             # Look for query-like patterns (phrases with location + keywords)
-            query_pattern = re.compile(r'\b(?:Mission District|San Francisco|SF)\s+[^\.\n]{10,80}', re.IGNORECASE)
+            query_pattern = re.compile(r'\b(?:Mission District|San Francisco|SF)\s+[^\.\n:]{10,80}', re.IGNORECASE)
             matches = query_pattern.findall(response)
             for match in matches:
                 match_clean = match.strip()
@@ -211,125 +225,176 @@ Generate 5 queries now, one per line:"""
         seen = set()
         for q in queries:
             q_lower = q.lower()
-            if q_lower not in seen and len(q_lower) > 10:
+            if q_lower not in seen and len(q_lower) > 15:
                 unique_queries.append(q)
                 seen.add(q_lower)
                 if len(unique_queries) >= 5:
                     break
         
-        return unique_queries[:5] if unique_queries else [
-            f"{location} {industry} closure homelessness",
-            f"{location} {industry} noise complaints",
-            f"San Francisco {industry} permit delays",
-            f"{location} business closure city problems",
-            f"SF {industry} shutdown Reddit"
-        ]  # Fallback queries
+        # Use fallback queries if we couldn't extract good ones
+        if len(unique_queries) < 3:
+            return [
+                f"{location} {industry} closure homelessness",
+                f"{location} {industry} noise complaints",
+                f"San Francisco {industry} permit delays",
+                f"{location} business closure city problems",
+                f"SF {industry} shutdown Reddit"
+            ]
+        
+        return unique_queries[:5]
     
     def _scrape_sources(self, queries: List[str], risk_input: Dict) -> List[Dict]:
-        """Scrape external sources using Yutori Research Agent API"""
+        """Use Gemini with web search (grounding) to find relevant sources"""
         
         scraped_content = []
         
-        # Check if Yutori API key is configured
-        if not Config.YUTORI_API_KEY:
-            logger.warning("YUTORI_API_KEY not configured, falling back to synthetic sources")
+        # Check if Gemini is available
+        if not self.gemini_client:
+            logger.warning("Gemini not initialized, falling back to synthetic sources")
             return self._create_synthetic_sources(queries)
         
-        headers = {
-            "Authorization": f"Bearer {Config.YUTORI_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        profile = risk_input.get("profile", {})
+        industry = profile.get("industry", "business")
+        location = profile.get("location", "San Francisco")
         
-        # Use Yutori Research Agent API - /v1/run endpoint
-        for query in queries:
-            try:
-                # Add "San Francisco" or "SF" to query for better results
-                sf_query = f"{query} San Francisco" if "san francisco" not in query.lower() and "sf" not in query.lower() else query
-                
-                # Format task description for Yutori Research Agent
-                task_description = f"Search for information about: {sf_query}. Focus on San Francisco business closures, problems, and city-fixable issues. Provide sources with citations."
-                
-                yutori_request = {
-                    "task": task_description,
-                    "tools": ["web_search", "citations"],
-                }
-                
-                response = requests.post(
-                    f"{Config.YUTORI_API_BASE}/v1/run",
-                    headers=headers,
-                    json=yutori_request,
-                    timeout=60  # Research agent may take longer
+        try:
+            from google.genai import types
+            
+            # Combine queries into a single research prompt
+            queries_text = "\n".join([f"- {q}" for q in queries])
+            
+            research_prompt = f"""You are a research assistant. Search the web for recent news and information about San Francisco business problems.
+
+I need to find real articles, news stories, and reports about these topics:
+{queries_text}
+
+Focus on:
+1. Recent news about {industry} businesses in {location} facing problems
+2. City-related issues (homelessness, permits, noise, violations)
+3. Business closures and their causes
+4. Reddit discussions or community reports
+
+For each relevant source you find, provide:
+- The article/source title
+- The URL
+- A brief summary of the content
+- The type of source (news, reddit, report, etc.)
+
+Format your response as a JSON array:
+[
+  {{
+    "title": "Article title",
+    "url": "https://...",
+    "summary": "Brief summary of content",
+    "source_type": "news"
+  }}
+]
+
+Find at least 5-10 relevant sources. Return ONLY the JSON array."""
+
+            print("   🔍 Gemini: Searching web for relevant sources...")
+            
+            # Use Gemini with Google Search grounding
+            response = self.gemini_client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=research_prompt,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                    temperature=0.3,
+                    max_output_tokens=4000
                 )
-                
-                if response.status_code == 200:
-                    results_data = response.json()
+            )
+            
+            response_text = response.text
+            print(f"   📄 Gemini response received ({len(response_text)} chars)")
+            
+            # Parse the JSON response
+            # Try to extract JSON from the response
+            json_match = re.search(r'\[[\s\S]*\]', response_text)
+            if json_match:
+                json_text = json_match.group(0)
+                try:
+                    # Clean the JSON text - remove control characters that can break parsing
+                    # Keep only printable ASCII and common whitespace
+                    cleaned_json = ''.join(
+                        char for char in json_text 
+                        if char in '\n\r\t' or (ord(char) >= 32 and ord(char) < 127) or ord(char) > 127
+                    )
+                    # Also replace problematic escape sequences
+                    cleaned_json = cleaned_json.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+                    # Fix double-escaped sequences
+                    cleaned_json = re.sub(r'\\\\([nrt])', r'\\\1', cleaned_json)
                     
-                    # Extract results from Yutori response
-                    # Yutori may return results in different formats
-                    sources = []
+                    sources = json.loads(cleaned_json)
                     
-                    # Try to extract sources/results from response
-                    if isinstance(results_data, dict):
-                        # Check for common response structures
-                        sources = (results_data.get("sources", []) or 
-                                  results_data.get("results", []) or
-                                  results_data.get("data", []) or
-                                  results_data.get("citations", []))
+                    for source in sources:
+                        url = source.get("url", "")
+                        title = source.get("title", "")
+                        summary = source.get("summary", "")
+                        source_type = source.get("source_type", "other")
                         
-                        # If response contains text with citations, parse it
-                        if not sources and "content" in results_data:
-                            content = results_data.get("content", "")
-                            # Try to extract URLs from content
-                            import re
-                            urls = re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', content)
-                            for url in urls[:5]:
-                                sources.append({
-                                    "url": url,
-                                    "title": f"Source from {query}",
-                                    "content": content[:500],
-                                })
-                    
-                    # Process structured sources
-                    for source in sources[:5]:
-                        url = source.get("url") or source.get("link") or source.get("source")
-                        title = source.get("title") or source.get("name") or f"Source: {query}"
-                        content = source.get("content") or source.get("snippet") or source.get("text") or ""
-                        
-                        if url:
+                        if url and title:
                             scraped_content.append({
-                                "source_type": self._classify_source(url),
+                                "source_type": source_type,
                                 "url": url,
                                 "title": title,
-                                "content": content[:2000],
-                                "query": query
+                                "content": summary[:2000],
+                                "query": queries[0] if queries else ""
                             })
+                            print(f"      ✓ Added: {title[:50]}...")
                     
-                    if scraped_content:
-                        logger.info(f"Yutori Research Agent: Found {len(sources)} sources for: {query[:50]}")
-                    else:
-                        logger.warning(f"Yutori Research Agent: No sources extracted from response for '{query}'")
-                        
-                elif response.status_code == 401:
-                    logger.warning(f"Yutori Research Agent: Authentication failed - check API key")
-                else:
-                    logger.warning(f"Yutori Research Agent: Request failed with status {response.status_code}: {response.text[:200]}")
-                    
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Yutori Research Agent error for '{query}': {e}")
+                except json.JSONDecodeError as e:
+                    # Silent warning - grounding metadata fallback will handle this
+                    logger.debug(f"JSON parse fallback to grounding metadata: {e}")
             
-            time.sleep(1)  # Rate limiting
+            # Also extract grounding metadata if available
+            if hasattr(response, 'candidates') and response.candidates:
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+                    grounding = candidate.grounding_metadata
+                    if hasattr(grounding, 'grounding_chunks'):
+                        for chunk in grounding.grounding_chunks:
+                            if hasattr(chunk, 'web') and chunk.web:
+                                web = chunk.web
+                                url = getattr(web, 'uri', '') or getattr(web, 'url', '')
+                                title = getattr(web, 'title', '') or 'Web Source'
+                                
+                                # Avoid duplicates
+                                existing_urls = [s['url'] for s in scraped_content]
+                                if url and url not in existing_urls:
+                                    scraped_content.append({
+                                        "source_type": self._classify_source(url),
+                                        "url": url,
+                                        "title": title,
+                                        "content": f"Source from Gemini web search for {industry} in {location}",
+                                        "query": queries[0] if queries else ""
+                                    })
+                                    print(f"      ✓ Grounding source: {title[:50]}...")
+            
+        except Exception as e:
+            print(f"   ❌ Gemini error: {e}")
+            logger.error(f"Gemini web search error: {e}")
         
         # If we have sources, return them
         if scraped_content:
-            logger.info(f"Successfully scraped {len(scraped_content)} sources from Yutori Research Agent")
+            print(f"   ✅ Gemini: Successfully found {len(scraped_content)} sources")
+            logger.info(f"Gemini: Successfully found {len(scraped_content)} sources")
             return scraped_content
         
-        # Fallback: Create synthetic sources
-        logger.info("No sources found via Yutori Research Agent, creating synthetic sources from queries")
-        return self._create_synthetic_sources(queries)
+        # No fallback - return empty list if Gemini fails
+        # (Commented out synthetic fallback)
+        print("   ⚠️ Gemini found no sources. No fallback will be used.")
+        logger.warning("No sources found from Gemini, returning empty list")
+        return []
+        
+        # # Final fallback: Create synthetic sources (DISABLED)
+        # print("   ⚠️ Gemini found no sources, using synthetic fallback...")
+        # logger.info("No sources found, creating synthetic sources from queries")
+        # return self._create_synthetic_sources(queries)
     
     def _create_synthetic_sources(self, queries: List[str]) -> List[Dict]:
-        """Create synthetic sources as fallback"""
+        """Create synthetic sources as fallback (DISABLED - kept for reference)"""
+        # This method is no longer called but kept for reference
         scraped_content = []
         for query in queries[:3]:
             # Extract key terms from query
@@ -354,37 +419,45 @@ Generate 5 queries now, one per line:"""
         for query in queries:
             try:
                 # Use DuckDuckGo HTML search (no API key needed, less likely to block)
-                search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+                import urllib.parse
+                encoded_query = urllib.parse.quote_plus(query)
+                search_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
                 headers = {
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Referer': 'https://duckduckgo.com/',
                 }
                 
                 response = requests.get(search_url, headers=headers, timeout=15)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.content, 'html.parser')
                 
-                results = soup.find_all('div', class_='result')
-                logger.info(f"DuckDuckGo requests: Found {len(results)} results for: {query[:50]}")
+                # Try multiple selectors for DuckDuckGo results
+                results = soup.find_all('div', class_='result') or soup.find_all('div', class_='results_links')
+                print(f"      Requests fallback: Found {len(results)} results for '{query[:40]}...'")
                 
                 for result in results[:5]:  # Top 5 results
                     try:
-                        link_elem = result.find('a', class_='result__a')
+                        # Try multiple ways to find the link
+                        link_elem = result.find('a', class_='result__a') or result.find('a', href=True)
                         
                         if link_elem:
                             url = link_elem.get('href', '')
+                            
                             # DuckDuckGo URLs need decoding
-                            if url.startswith('/l/?kh='):
+                            if url and ('duckduckgo.com/l/' in url or url.startswith('/l/')):
                                 # Extract actual URL from DuckDuckGo redirect
-                                import urllib.parse
-                                url_parts = url.split('uddg=')
-                                if len(url_parts) > 1:
-                                    url = urllib.parse.unquote(url_parts[1].split('&')[0])
+                                if 'uddg=' in url:
+                                    url_parts = url.split('uddg=')
+                                    if len(url_parts) > 1:
+                                        url = urllib.parse.unquote(url_parts[1].split('&')[0])
                             
                             title = link_elem.get_text(strip=True)
-                            snippet_elem = result.find('a', class_='result__snippet')
+                            snippet_elem = result.find('a', class_='result__snippet') or result.find('span')
                             snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
                             
-                            if url and url.startswith('http'):
+                            if url and url.startswith('http') and title and len(title) > 5:
                                 scraped_content.append({
                                     "source_type": self._classify_source(url),
                                     "url": url,
@@ -392,6 +465,7 @@ Generate 5 queries now, one per line:"""
                                     "content": snippet[:2000] if snippet else f"Content from {url}",
                                     "query": query
                                 })
+                                print(f"      ✓ Requests: Added {title[:40]}...")
                     except Exception as e:
                         logger.debug(f"Error processing DuckDuckGo result: {e}")
                         continue
@@ -399,9 +473,11 @@ Generate 5 queries now, one per line:"""
                 time.sleep(2)  # Rate limiting
                 
             except Exception as e:
+                print(f"      ❌ Requests error: {e}")
                 logger.warning(f"Error in requests scraping for '{query}': {e}")
                 continue
         
+        print(f"      Requests fallback scraped {len(scraped_content)} sources total")
         logger.info(f"Requests fallback scraped {len(scraped_content)} sources total")
         return scraped_content
     
@@ -519,7 +595,8 @@ Return ONLY the JSON array, nothing else."""
         
         # Strategy 5: If still no JSON, create a fallback problem from the content
         if not json_text:
-            logger.warning(f"Could not extract JSON from response: {response[:300]}")
+            # Silent debug log - fallback will handle this
+            logger.debug(f"No JSON found in response, using content-based fallback")
             # Create a fallback problem from the mock content
             source_list = original_scraped_content if original_scraped_content else scraped_content
             if source_list:
