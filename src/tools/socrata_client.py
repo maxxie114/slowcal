@@ -11,6 +11,7 @@ Supports:
 import logging
 import hashlib
 import json
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -24,6 +25,70 @@ sys.path.append(str(Path(__file__).parent.parent))
 from utils.config import Config
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_for_soql(value: str) -> str:
+    """
+    Sanitize a string value for use in SoQL queries.
+    
+    - Escapes single quotes (SoQL string delimiter)
+    - Removes special characters that cause 400 errors
+    - Normalizes whitespace
+    
+    Args:
+        value: Raw string value
+        
+    Returns:
+        Sanitized string safe for SoQL
+    """
+    if not value:
+        return ""
+    
+    # Escape single quotes by doubling them (SoQL standard)
+    sanitized = value.replace("'", "''")
+    
+    # Remove problematic characters for LIKE patterns
+    # Keep alphanumeric, spaces, and common address chars
+    sanitized = re.sub(r'[^\w\s\-\#\.]', ' ', sanitized)
+    
+    # Normalize whitespace
+    sanitized = ' '.join(sanitized.split())
+    
+    return sanitized.strip()
+
+
+def extract_address_components(address: str) -> Dict[str, str]:
+    """
+    Extract street number and street name from an address string.
+    
+    Args:
+        address: Full address string like "300 Webster St, SF"
+        
+    Returns:
+        Dict with 'street_number' and 'street_name' keys
+    """
+    if not address:
+        return {"street_number": "", "street_name": ""}
+    
+    # Clean up the address
+    cleaned = address.upper().strip()
+    
+    # Remove city/state suffix patterns
+    cleaned = re.sub(r',?\s*(SAN FRANCISCO|SF|CA|CALIFORNIA).*$', '', cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.strip(' ,')
+    
+    # Try to extract street number and name
+    match = re.match(r'^(\d+)\s+(.+)$', cleaned)
+    if match:
+        return {
+            "street_number": match.group(1),
+            "street_name": sanitize_for_soql(match.group(2))
+        }
+    
+    return {
+        "street_number": "",
+        "street_name": sanitize_for_soql(cleaned)
+    }
 
 
 @dataclass
@@ -121,6 +186,11 @@ class SocrataClient:
         # Check cache
         cache_key = self._get_cache_key(dataset_id, full_query)
         if use_cache:
+            # NOTE: Local file override is DISABLED for regular queries.
+            # The local file override was causing ALL queries to return cached data
+            # instead of executing the actual SoQL query. Agents that need local file
+            # access (like VacancyCorridorAgent) should load files directly.
+            
             cached = self._get_cached(cache_key)
             if cached:
                 return cached

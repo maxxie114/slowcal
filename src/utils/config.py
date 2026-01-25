@@ -30,15 +30,22 @@ class Config:
     SF_DATA_API_BASE = "https://data.sfgov.org/resource"
     SF_DATA_APP_TOKEN = os.getenv("SF_DATA_APP_TOKEN", "")
     
-    # Nemotron/NIM Configuration (DGX Spark)
-    # Default to local DGX Spark endpoint (can be overridden via .env)
-    NEMOTRON_BASE_URL = os.getenv("NEMOTRON_BASE_URL", "http://localhost:8000/v1")
-    NEMOTRON_API_KEY = os.getenv("NEMOTRON_API_KEY", "local-nemotron-key")  # Default for local DGX Spark
-    NEMOTRON_MODEL = os.getenv("NEMOTRON_MODEL", "nvidia/nemotron-4-340b-instruct")
+    # Nemotron/NIM Configuration
+    # Supports both NVIDIA API (build.nvidia.com) and local DGX Spark
+    # For NVIDIA API: set NEMOTRON_BASE_URL="https://integrate.api.nvidia.com/v1"
+    # For local NIM: set NEMOTRON_BASE_URL="http://localhost:8000/v1"
+    NEMOTRON_BASE_URL = os.getenv("NEMOTRON_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    NEMOTRON_API_KEY = os.getenv("NEMOTRON_API_KEY", os.getenv("NVIDIA_API_KEY", ""))
     
-    # NIM Health endpoints
-    NIM_HEALTH_READY = "/v1/health/ready"
-    NIM_HEALTH_LIVE = "/v1/health/live"
+    # Available Nemotron models:
+    # - nvidia/llama-3.1-nemotron-70b-instruct (recommended for general use)
+    # - nvidia/llama-3.1-nemotron-ultra-253b-v1 (highest quality, slower)
+    # - nvidia/nemotron-4-340b-instruct (legacy)
+    NEMOTRON_MODEL = os.getenv("NEMOTRON_MODEL", "nvidia/llama-3.1-nemotron-70b-instruct")
+    
+    # NIM Health endpoints (supports both vLLM and NIM formats)
+    NIM_HEALTH_READY = "/health"  # vLLM uses /health, NIM uses /v1/health/ready
+    NIM_HEALTH_LIVE = "/health"
     NIM_MODELS_ENDPOINT = "/v1/models"
     
     # Optional: NeMo Retriever NIM microservices

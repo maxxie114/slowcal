@@ -41,16 +41,60 @@ class NIMResponse:
     latency_ms: float
     
     def parse_json(self) -> Optional[Dict[str, Any]]:
-        """Attempt to parse content as JSON"""
+        """Attempt to parse content as JSON with multiple fallback strategies"""
+        if not self.content:
+            return None
+            
+        content = self.content.strip()
+        
+        # Strategy 1: Try direct JSON parse
         try:
-            # Try to extract JSON from markdown code blocks
-            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', self.content)
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 2: Extract from markdown code blocks (```json ... ``` or ``` ... ```)
+        try:
+            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', content)
             if json_match:
                 return json.loads(json_match.group(1).strip())
-            return json.loads(self.content)
         except json.JSONDecodeError:
-            logger.warning("Failed to parse response as JSON")
-            return None
+            pass
+        
+        # Strategy 3: Find JSON object boundaries { ... }
+        try:
+            start = content.find('{')
+            end = content.rfind('}')
+            if start != -1 and end != -1 and end > start:
+                json_str = content[start:end + 1]
+                return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 4: Find JSON array boundaries [ ... ]
+        try:
+            start = content.find('[')
+            end = content.rfind(']')
+            if start != -1 and end != -1 and end > start:
+                json_str = content[start:end + 1]
+                return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 5: Try to fix common JSON issues
+        try:
+            # Remove trailing commas before } or ]
+            fixed = re.sub(r',\s*([}\]])', r'\1', content)
+            # Try to find JSON in the fixed content
+            start = fixed.find('{')
+            end = fixed.rfind('}')
+            if start != -1 and end != -1:
+                return json.loads(fixed[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+        
+        logger.warning(f"Failed to parse response as JSON. Content preview: {content[:200]}...")
+        return None
 
 
 class NIMClient:
@@ -86,12 +130,14 @@ class NIMClient:
         model: str = None,
         default_temperature: float = 0.3,
         default_max_tokens: int = 2000,
+        timeout: float = 300.0,  # Increased timeout for slower models
     ):
         self.base_url = base_url or Config.NEMOTRON_BASE_URL
         self.api_key = api_key or Config.NEMOTRON_API_KEY
         self.model = model or Config.NEMOTRON_MODEL
         self.default_temperature = default_temperature
         self.default_max_tokens = default_max_tokens
+        self.timeout = timeout  # Store timeout
         
         # Initialize OpenAI client if available
         self.openai_client = None
@@ -99,6 +145,7 @@ class NIMClient:
             self.openai_client = OpenAI(
                 base_url=self.base_url,
                 api_key=self.api_key,
+                timeout=self.timeout,  # Add timeout to OpenAI client
             )
     
     def is_ready(self) -> bool:

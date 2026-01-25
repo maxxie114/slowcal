@@ -191,31 +191,48 @@ class PermitsAgent(BaseDataAgent):
         """Get permit cost statistics"""
         start_date = as_of - timedelta(days=months_back * 30)
         
-        if lat and lon:
-            result = self.client.query_spatial(
-                dataset_id=self.dataset_id,
-                lat=lat,
-                lon=lon,
-                radius_meters=Config.DEFAULT_SEARCH_RADIUS_METERS,
-                point_field="location",
-                date_field="filed_date",
-                months_back=months_back,
-                select="avg(estimated_cost) as avg_cost, sum(estimated_cost) as total_cost",
-                as_of=as_of,
-            )
-        else:
-            where = f"filed_date >= '{start_date.strftime('%Y-%m-%dT%H:%M:%S')}'"
-            result = self.client.query(
-                self.dataset_id,
-                f"$select=avg(estimated_cost) as avg_cost, sum(estimated_cost) as total_cost&$where={where}",
-            )
+        # Note: estimated_cost is stored as text in the dataset, so we fetch raw values
+        # and compute aggregates locally
+        try:
+            if lat and lon:
+                result = self.client.query_spatial(
+                    dataset_id=self.dataset_id,
+                    lat=lat,
+                    lon=lon,
+                    radius_meters=Config.DEFAULT_SEARCH_RADIUS_METERS,
+                    point_field="location",
+                    date_field="filed_date",
+                    months_back=months_back,
+                    select="estimated_cost",
+                    as_of=as_of,
+                )
+            else:
+                where = f"filed_date >= '{start_date.strftime('%Y-%m-%dT%H:%M:%S')}'"
+                # Limit to 1000 records for performance and just get sample stats
+                result = self.client.query(
+                    self.dataset_id,
+                    f"$select=estimated_cost&$where={where}&$limit=1000",
+                )
+            
+            # Parse costs and compute averages locally
+            costs = []
+            for row in result.data:
+                try:
+                    cost_str = row.get("estimated_cost", "0") or "0"
+                    cost = float(cost_str.replace(",", "").replace("$", ""))
+                    if cost > 0:
+                        costs.append(cost)
+                except (ValueError, TypeError):
+                    pass
+            
+            if costs:
+                return {
+                    "avg_cost": sum(costs) / len(costs),
+                    "total_cost": sum(costs),
+                }
+        except Exception as e:
+            logger.warning(f"Error getting permit costs: {e}")
         
-        if result.data and len(result.data) > 0:
-            row = result.data[0]
-            return {
-                "avg_cost": float(row.get("avg_cost", 0) or 0),
-                "total_cost": float(row.get("total_cost", 0) or 0),
-            }
         return {"avg_cost": 0, "total_cost": 0}
     
     def _get_permit_types(

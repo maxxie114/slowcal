@@ -350,3 +350,105 @@ def validate_json_string(
 def get_schema_json(schema_class: type) -> Dict[str, Any]:
     """Get JSON schema for a Pydantic model"""
     return schema_class.model_json_schema()
+
+
+class SchemaValidator:
+    """
+    Schema validator class for agent outputs.
+    
+    Provides convenient validation methods with error details.
+    
+    Example:
+        validator = SchemaValidator()
+        is_valid, errors = validator.validate(data, schema)
+    """
+    
+    def __init__(self):
+        self._cache = {}
+    
+    def validate(
+        self,
+        data: Dict[str, Any],
+        schema: Any,
+    ) -> tuple:
+        """
+        Validate data against a schema.
+        
+        Args:
+            data: Dictionary to validate
+            schema: Either a Pydantic model class or JSON Schema dict
+            
+        Returns:
+            Tuple of (is_valid: bool, errors: List[str])
+        """
+        errors = []
+        
+        try:
+            if isinstance(schema, type) and issubclass(schema, BaseModel):
+                # Pydantic model
+                schema.model_validate(data)
+            elif isinstance(schema, dict):
+                # JSON Schema - basic validation
+                errors = self._validate_json_schema(data, schema)
+                if errors:
+                    return False, errors
+            return True, []
+        except Exception as e:
+            if hasattr(e, 'errors'):
+                for err in e.errors():
+                    loc = ".".join(str(x) for x in err.get("loc", []))
+                    msg = err.get("msg", str(err))
+                    errors.append(f"{loc}: {msg}")
+            else:
+                errors.append(str(e))
+            return False, errors
+    
+    def _validate_json_schema(
+        self,
+        data: Dict[str, Any],
+        schema: Dict[str, Any]
+    ) -> List[str]:
+        """Basic JSON Schema validation"""
+        errors = []
+        
+        # Check required fields
+        required = schema.get("required", [])
+        for field in required:
+            if field not in data:
+                errors.append(f"Missing required field: {field}")
+        
+        # Check properties
+        properties = schema.get("properties", {})
+        for field, field_schema in properties.items():
+            if field in data:
+                value = data[field]
+                field_type = field_schema.get("type")
+                
+                # Type checking
+                type_map = {
+                    "string": str,
+                    "number": (int, float),
+                    "integer": int,
+                    "boolean": bool,
+                    "array": list,
+                    "object": dict,
+                }
+                
+                expected_type = type_map.get(field_type)
+                if expected_type and not isinstance(value, expected_type):
+                    errors.append(f"{field}: expected {field_type}, got {type(value).__name__}")
+                
+                # Enum checking
+                enum_values = field_schema.get("enum")
+                if enum_values and value not in enum_values:
+                    errors.append(f"{field}: must be one of {enum_values}")
+        
+        return errors
+    
+    def validate_response(self, data: Dict[str, Any]) -> tuple:
+        """Validate against RiskAnalysisResponse schema"""
+        return self.validate(data, RiskAnalysisResponse)
+    
+    def validate_evidence_pack(self, data: Dict[str, Any]) -> tuple:
+        """Validate against EvidencePack schema"""
+        return self.validate(data, EvidencePack)

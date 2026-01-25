@@ -90,6 +90,10 @@ class BusinessRegistryAgent(BaseDataAgent):
             candidate["evidence_ref"] = ref
             candidates.append(candidate)
         
+        # Score and rank candidates based on match quality
+        search_term = (business_name or address or "").upper()
+        candidates = self._rank_candidates(candidates, search_term)
+        
         # Select primary candidate (best match)
         primary = candidates[0] if candidates else None
         
@@ -110,27 +114,88 @@ class BusinessRegistryAgent(BaseDataAgent):
     
     def _search_by_name(self, name: str) -> List[Dict[str, Any]]:
         """Search by business name or DBA"""
-        normalized = name.upper().strip()
+        # Extract potential address from the query (e.g., "SONA Fashions, 966 Grant Ave")
+        parts = name.split(',')
+        business_name = parts[0].strip().upper()
+        address_part = parts[1].strip().upper() if len(parts) > 1 else None
         
-        soql = f"""$select=*
-&$where=upper(dba_name) LIKE '%{normalized}%' OR upper(ownership_name) LIKE '%{normalized}%'
-&$order=location_start_date DESC
-&$limit=20"""
+        # Try to extract street number for more precise matching
+        import re
+        street_num_match = re.search(r'\b(\d+)\b', address_part or '')
+        street_num = street_num_match.group(1) if street_num_match else None
         
-        result = self.client.query(self.dataset_id, soql.replace('\n', ''))
-        return result.data
+        results = []
+        
+        # Strategy 1: Search by address if we have a street number
+        if street_num and address_part:
+            soql = f"""$where=full_business_address like '%{street_num}%' AND city='San Francisco'&$order=location_start_date DESC&$limit=50"""
+            try:
+                result = self.client.query(self.dataset_id, soql, use_cache=False)
+                # Filter for matches that look like our business
+                for r in result.data:
+                    addr = (r.get('full_business_address') or '').upper()
+                    dba = (r.get('dba_name') or '').upper()
+                    owner = (r.get('ownership_name') or '').upper()
+                    # Check if address matches and name is similar
+                    if street_num in addr:
+                        # Score by name similarity
+                        name_words = set(business_name.replace(',', ' ').split())
+                        dba_words = set(dba.replace(',', ' ').split())
+                        owner_words = set(owner.replace(',', ' ').split())
+                        if name_words & dba_words or name_words & owner_words:
+                            results.append(r)
+                        elif not results:  # Keep as fallback
+                            results.append(r)
+            except Exception as e:
+                logger.warning(f"Address search failed: {e}")
+        
+        # Strategy 2: Search by business name directly
+        if not results:
+            # Use first word of business name for LIKE search
+            first_word = business_name.split()[0] if business_name else ''
+            if first_word and len(first_word) >= 3:
+                soql = f"""$where=dba_name like '%{first_word}%' AND city='San Francisco'&$order=location_start_date DESC&$limit=20"""
+                try:
+                    result = self.client.query(self.dataset_id, soql, use_cache=False)
+                    results.extend(result.data)
+                except Exception as e:
+                    logger.warning(f"Name search failed: {e}")
+        
+        # Filter to only SF businesses and sort by match quality
+        sf_results = [r for r in results if (r.get('city') or '').upper() in ('SAN FRANCISCO', 'SF')]
+        
+        return sf_results if sf_results else results[:10]
     
     def _search_by_address(self, address: str) -> List[Dict[str, Any]]:
         """Search by street address"""
-        normalized = address.upper().strip()
+        import re
         
-        soql = f"""$select=*
-&$where=upper(full_business_address) LIKE '%{normalized}%'
-&$order=location_start_date DESC
-&$limit=20"""
+        # Extract street number for more precise matching
+        address_clean = address.upper().strip()
+        # Remove city/state suffixes
+        address_clean = re.sub(r',?\s*(SAN FRANCISCO|SF|CA|CALIFORNIA).*$', '', address_clean, flags=re.IGNORECASE)
         
-        result = self.client.query(self.dataset_id, soql.replace('\n', ''))
-        return result.data
+        street_num_match = re.search(r'\b(\d+)\b', address_clean)
+        street_num = street_num_match.group(1) if street_num_match else None
+        
+        if street_num:
+            soql = f"""$where=full_business_address like '%{street_num}%' AND city='San Francisco'&$order=location_start_date DESC&$limit=30"""
+        else:
+            # Fallback to first word
+            words = address_clean.split()
+            if words:
+                soql = f"""$where=full_business_address like '%{words[0]}%' AND city='San Francisco'&$order=location_start_date DESC&$limit=20"""
+            else:
+                return []
+        
+        try:
+            result = self.client.query(self.dataset_id, soql, use_cache=False)
+            # Filter to only SF
+            sf_results = [r for r in result.data if (r.get('city') or '').upper() in ('SAN FRANCISCO', 'SF')]
+            return sf_results
+        except Exception as e:
+            logger.warning(f"Address search failed: {e}")
+            return []
     
     def _search_by_location(self, lat: float, lon: float, radius: int = 100) -> List[Dict[str, Any]]:
         """Search by geographic location"""
@@ -148,14 +213,23 @@ class BusinessRegistryAgent(BaseDataAgent):
     
     def _parse_business_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
         """Parse raw record into structured business data"""
-        # Extract location coordinates if available
-        location = record.get("business_location", {})
+        # Extract location coordinates if available. Data from Socrata
+        # sometimes uses `business_location` with `latitude`/`longitude`
+        # keys, other times it's `location` with GeoJSON `coordinates`.
+        location = record.get("business_location") or record.get("location") or {}
         lat = None
         lon = None
-        
+
         if isinstance(location, dict):
-            lat = location.get("latitude")
-            lon = location.get("longitude")
+            # Case A: business_location: {"latitude": ..., "longitude": ...}
+            if "latitude" in location and "longitude" in location:
+                lat = location.get("latitude")
+                lon = location.get("longitude")
+            # Case B: location GeoJSON: {"type": "Point", "coordinates": [lon, lat]}
+            elif "coordinates" in location and isinstance(location.get("coordinates"), (list, tuple)):
+                coords = location.get("coordinates")
+                if len(coords) >= 2:
+                    lon, lat = coords[0], coords[1]
         
         # Parse dates
         start_date = record.get("location_start_date")
@@ -185,6 +259,73 @@ class BusinessRegistryAgent(BaseDataAgent):
             "transient_tax": record.get("transient_occupancy_tax") == "Y",
             "supervisor_district": record.get("supervisor_district"),
         }
+    
+    def _rank_candidates(self, candidates: List[Dict[str, Any]], search_term: str) -> List[Dict[str, Any]]:
+        """Rank candidates by match quality to the search term"""
+        import re
+        
+        # Parse search term to extract business name and address parts
+        parts = search_term.split(',')
+        search_name = parts[0].strip().upper() if parts else ''
+        search_addr = parts[1].strip().upper() if len(parts) > 1 else ''
+        
+        # Extract street number from search address
+        street_num_match = re.search(r'\b(\d+)\b', search_addr)
+        search_street_num = street_num_match.group(1) if street_num_match else None
+        
+        def score_candidate(c: Dict[str, Any]) -> int:
+            score = 0
+            
+            cand_name = (c.get('business_name') or c.get('dba_name') or '').upper()
+            cand_addr = (c.get('address') or '').upper()
+            
+            # Name match scoring
+            name_words = set(search_name.replace(',', ' ').split())
+            cand_words = set(cand_name.replace(',', ' ').split())
+            
+            # Exact name match
+            if search_name and search_name in cand_name:
+                score += 100
+            # Word overlap
+            overlap = name_words & cand_words
+            score += len(overlap) * 20
+            
+            # Address match scoring
+            if search_street_num:
+                # Exact street number match (not just contains)
+                addr_num_match = re.search(r'\b(\d+)\b', cand_addr)
+                if addr_num_match and addr_num_match.group(1) == search_street_num:
+                    score += 50
+                elif search_street_num in cand_addr:
+                    score += 10  # Partial match (e.g., 966 in 2966)
+            
+            # Street name match
+            if search_addr:
+                # Extract street name words (skip numbers, city, state)
+                search_street_words = [w for w in search_addr.split() if not w.isdigit() and w not in ('SF', 'CA', 'SAN', 'FRANCISCO')]
+                for sw in search_street_words:
+                    if sw in cand_addr:
+                        score += 15
+            
+            # Active business bonus
+            if c.get('is_active'):
+                score += 5
+            
+            # Has coordinates bonus
+            if c.get('latitude') and c.get('longitude'):
+                score += 3
+            
+            return score
+        
+        # Sort by score descending
+        scored = [(score_candidate(c), c) for c in candidates]
+        scored.sort(key=lambda x: -x[0])
+        
+        # Add match score to candidates for debugging
+        for score, c in scored:
+            c['match_score'] = score
+        
+        return [c for _, c in scored]
     
     def get_business_by_id(self, business_id: str) -> Optional[Dict[str, Any]]:
         """Fetch a specific business by ID"""

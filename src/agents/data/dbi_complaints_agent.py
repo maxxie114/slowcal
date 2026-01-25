@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from utils.config import Config
+from tools.socrata_client import sanitize_for_soql, extract_address_components
 
 logger = logging.getLogger(__name__)
 
@@ -155,12 +156,20 @@ class DBIComplaintsAgent(BaseDataAgent):
         """Get DBI complaint count for time window"""
         start_date = as_of - timedelta(days=months_back * 30)
         
-        # DBI complaints are typically queried by address
-        where = f"file_date >= '{start_date.strftime('%Y-%m-%dT%H:%M:%S')}'"
+        # DBI complaints use date_filed field and separate street_number/street_name fields
+        where = f"date_filed >= '{start_date.strftime('%Y-%m-%dT%H:%M:%S')}'"
         
         if address:
-            normalized = address.upper().strip()
-            where = f"({where}) AND upper(address) LIKE '%{normalized}%'"
+            # Extract and sanitize address components
+            addr_parts = extract_address_components(address)
+            if addr_parts["street_number"] and addr_parts["street_name"]:
+                # Query using separate street_number and street_name fields
+                street_name_clean = addr_parts['street_name'].split()[0] if addr_parts['street_name'] else ""
+                where = f"({where}) AND street_number = '{addr_parts['street_number']}' AND upper(street_name) LIKE '%{street_name_clean[:15]}%'"
+            elif addr_parts["street_name"]:
+                # Just use street name
+                street_name_clean = addr_parts['street_name'].split()[0] if addr_parts['street_name'] else ""
+                where = f"({where}) AND upper(street_name) LIKE '%{street_name_clean[:15]}%'"
         elif lat and lon:
             # Use spatial query if available
             try:
@@ -200,14 +209,19 @@ class DBIComplaintsAgent(BaseDataAgent):
         """Get complaints breakdown by DBI division"""
         start_date = as_of - timedelta(days=months_back * 30)
         
-        where = f"file_date >= '{start_date.strftime('%Y-%m-%dT%H:%M:%S')}'"
+        where = f"date_filed >= '{start_date.strftime('%Y-%m-%dT%H:%M:%S')}'"
         if address:
-            normalized = address.upper().strip()
-            where = f"({where}) AND upper(address) LIKE '%{normalized}%'"
+            addr_parts = extract_address_components(address)
+            if addr_parts["street_number"] and addr_parts["street_name"]:
+                street_name_clean = addr_parts['street_name'].split()[0] if addr_parts['street_name'] else ""
+                where = f"({where}) AND street_number = '{addr_parts['street_number']}' AND upper(street_name) LIKE '%{street_name_clean[:15]}%'"
+            elif addr_parts["street_name"]:
+                street_name_clean = addr_parts['street_name'].split()[0] if addr_parts['street_name'] else ""
+                where = f"({where}) AND upper(street_name) LIKE '%{street_name_clean[:15]}%'"
         
         result = self.client.query(
             self.dataset_id,
-            f"$select=division, count(*) as count&$where={where}&$group=division&$order=count DESC&$limit=10",
+            f"$select=receiving_division as division, count(*) as count&$where={where}&$group=receiving_division&$order=count DESC&$limit=10",
         )
         
         return [
@@ -226,10 +240,15 @@ class DBIComplaintsAgent(BaseDataAgent):
         """Get open/closed status counts"""
         start_date = as_of - timedelta(days=months_back * 30)
         
-        where = f"file_date >= '{start_date.strftime('%Y-%m-%dT%H:%M:%S')}'"
+        where = f"date_filed >= '{start_date.strftime('%Y-%m-%dT%H:%M:%S')}'"
         if address:
-            normalized = address.upper().strip()
-            where = f"({where}) AND upper(address) LIKE '%{normalized}%'"
+            addr_parts = extract_address_components(address)
+            if addr_parts["street_number"] and addr_parts["street_name"]:
+                street_name_clean = addr_parts['street_name'].split()[0] if addr_parts['street_name'] else ""
+                where = f"({where}) AND street_number = '{addr_parts['street_number']}' AND upper(street_name) LIKE '%{street_name_clean[:15]}%'"
+            elif addr_parts["street_name"]:
+                street_name_clean = addr_parts['street_name'].split()[0] if addr_parts['street_name'] else ""
+                where = f"({where}) AND upper(street_name) LIKE '%{street_name_clean[:15]}%'"
         
         result = self.client.query(
             self.dataset_id,
