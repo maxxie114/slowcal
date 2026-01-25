@@ -4,6 +4,10 @@ Configuration management
 
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+load_dotenv()
 
 class Config:
     """Configuration settings for the SF Business Intelligence Platform"""
@@ -20,9 +24,10 @@ class Config:
     SF_DATA_APP_TOKEN = os.getenv("SF_DATA_APP_TOKEN", "")
     
     # Nemotron/OpenAI Configuration
-    NEMOTRON_BASE_URL = os.getenv("NEMOTRON_BASE_URL", "http://localhost:8000/v1")
-    NEMOTRON_API_KEY = os.getenv("NEMOTRON_API_KEY", "local-nemotron-key")
-    NEMOTRON_MODEL = os.getenv("NEMOTRON_MODEL", "nvidia/nemotron-4-340b-instruct")
+    # Default to local DGX Spark endpoint (can be overridden via .env)
+    NEMOTRON_BASE_URL = os.getenv("NEMOTRON_BASE_URL", "http://192.168.128.252:8000/v1")
+    NEMOTRON_API_KEY = os.getenv("NEMOTRON_API_KEY", "local-nemotron-key")  # Default for local DGX Spark
+    NEMOTRON_MODEL = os.getenv("NEMOTRON_MODEL", "nemotron-3-nano")
     
     # Data sources (Socrata dataset identifiers)
     BUSINESS_LICENSE_DATASET = "g8m3-pdis"  # Registered Business Locations - San Francisco
@@ -37,6 +42,17 @@ class Config:
     # Streamlit settings
     STREAMLIT_TITLE = "SF Small Business Intelligence Platform"
     STREAMLIT_PAGE_ICON = "🏢"
+    
+    # Agent Workflow settings
+    AGENT_SEARCH_QUERIES_COUNT = 5
+    AGENT_MAX_SOURCES_PER_QUERY = 10
+    AGENT_SCRAPE_DELAY_SECONDS = 2
+    AGENT_PAGE_TIMEOUT_SECONDS = 30
+    AGENT_MAX_CONTENT_LENGTH = 5000
+    
+    # Yutori API Configuration
+    YUTORI_API_KEY = os.getenv("YUTORI_API_KEY", "")
+    YUTORI_API_BASE = "https://api.yutori.ai"
     
     @classmethod
     def ensure_directories(cls):

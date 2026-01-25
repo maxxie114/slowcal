@@ -1,0 +1,92 @@
+{
+  "problems": [
+    {
+      "problem": "Homeless encampments blocking storefronts",
+      "severity": "high",
+      "description": "Encampments block restaurant storefronts in the Mission District, causing safety concerns and loss of customers.",
+      "sources": [
+        "https://sfchronicle.com/business/restaurant-closures"
+      ],
+      "city_fixable": true,
+      "city_department": "San Francisco Department of Public Works",
+      "city_code": "SF Health Code \u00a7 4100",
+      "solutions": [
+        {
+          "action": "Contact SF 311 for assistance (Source: https://sfchronicle.com/business/restaurant-closures)",
+          "steps": [
+            "Call 311 or visit sf311.org (based on: https://sfchronicle.com/business/restaurant-closures)",
+            "Describe the problem",
+            "Follow up if needed"
+          ],
+          "contact": "311 or sf311.org",
+          "expected_timeline": "48-72 hours",
+          "city_resource": "SF 311",
+          "source_citation": "https://sfchronicle.com/business/restaurant-closures"
+        }
+      ]
+    },
+    {
+      "problem": "Noise complaints affecting business license renewal",
+      "severity": "high",
+      "description": "Neighbors file repeated noise complaints that delay or jeopardize restaurant business license renewals.",
+      "sources": [
+        "https://reddit.com/r/sanfrancisco/business-struggles"
+      ],
+      "city_fixable": true,
+      "city_department": "San Francisco Police Department",
+      "city_code": "SF Noise Ordinance Chapter 11.9",
+      "solutions": [
+        {
+          "action": "Contact SF 311 for assistance (Source: https://reddit.com/r/sanfrancisco/business-struggles)",
+          "steps": [
+            "Call 311 or visit sf311.org (based on: https://reddit.com/r/sanfrancisco/business-struggles)",
+            "Describe the problem",
+            "Follow up if needed"
+          ],
+          "contact": "311 or sf311.org",
+          "expected_timeline": "48-72 hours",
+          "city_resource": "SF 311",
+          "source_citation": "https://reddit.com/r/sanfrancisco/business-struggles"
+        }
+      ]
+    },
+    {
+      "problem": "Permit processing delays",
+      "severity": "high",
+      "description": "Small businesses experience months-long delays for permits from the Planning Department, hindering operations.",
+      "sources": [
+        "https://sfexaminer.com/business/permits-delays"
+      ],
+      "city_fixable": true,
+      "city_department": "San Francisco Planning Department",
+      "city_code": "SF Planning Code \u00a7 101",
+      "solutions": [
+        {
+          "action": "Contact SF 311 for assistance (Source: https://sfexaminer.com/business/permits-delays)",
+          "steps": [
+            "Call 311 or visit sf311.org (based on: https://sfexaminer.com/business/permits-delays)",
+            "Describe the problem",
+            "Follow up if needed"
+          ],
+          "contact": "311 or sf311.org",
+          "expected_timeline": "48-72 hours",
+          "city_resource": "SF 311",
+          "source_citation": "https://sfexaminer.com/business/permits-delays"
+        }
+      ]
+    }
+  ],
+  "summary": "Your business faces 3 city-fixable problems:\n\u2022 Homeless encampments blocking storefronts (high severity)\n\u2022 Noise complaints affecting business license renewal (high severity)\n\u2022 Permit processing delays (high severity)\n\nTake action now to address these issues before it's too late.",
+  "risk_profile": {
+    "industry": "restaurant",
+    "age": "young",
+    "risk_factors": [
+      "high violations",
+      "young age",
+      "restaurant industry"
+    ],
+    "business_age_years": 2,
+    "total_violations": 5,
+    "location": "Mission District"
+  }
+}
