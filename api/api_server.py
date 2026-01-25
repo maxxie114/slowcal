@@ -71,6 +71,35 @@ class RiskDriver(BaseModel):
     contribution: float
 
 
+def format_driver_name(raw_name: str) -> str:
+    """Convert feature names to human-readable format"""
+    name_map = {
+        "business_age_years": "Business Age",
+        "permit_count_6m": "Recent Permits",
+        "permit_count_3m": "Permits (3 months)",
+        "permit_count_12m": "Permits (12 months)",
+        "complaint_count_6m": "311 Complaints",
+        "complaint_count_3m": "Complaints (3 months)",
+        "complaint_count_12m": "Complaints (12 months)",
+        "incident_count_6m": "Crime Incidents",
+        "dbi_count_6m": "Building Violations",
+        "eviction_rate_relative": "Eviction Risk",
+        "vacancy_rate": "Vacancy Rate",
+        "has_open_violations": "Open Violations",
+        "neighborhood_stress_level": "Neighborhood Stress",
+        "permit_trend": "Permit Trend",
+        "complaint_trend": "Complaint Trend",
+        "incident_trend": "Incident Trend",
+        "is_active": "Business Status",
+        "has_naic_code": "Industry Classification",
+        "avg_permit_cost_12m": "Permit Costs",
+        "business_relevant_complaints_6m": "Business-Related Complaints",
+        "business_relevant_incidents_6m": "Business-Related Incidents",
+        "open_closed_ratio": "Open/Closed Ratio",
+    }
+    return name_map.get(raw_name, raw_name.replace("_", " ").title())
+
+
 class StrategicAction(BaseModel):
     """A recommended action"""
     horizon: str  # "2 weeks", "1-2 months", etc.
@@ -185,16 +214,19 @@ async def analyze_business(request: BusinessAnalysisRequest):
         
         # Parse risk drivers
         risk_drivers = []
+        logger.info(f"Raw top_drivers: {risk.get('top_drivers', [])[:2]}")  # Log first 2
         for driver in risk.get("top_drivers", [])[:5]:
             if isinstance(driver, dict):
+                # Try multiple possible key names: driver, feature, name
+                raw_name = driver.get("driver") or driver.get("feature") or driver.get("name", "unknown")
                 risk_drivers.append(RiskDriver(
-                    name=driver.get("feature", driver.get("name", "unknown")),
-                    trend=driver.get("trend", "stable"),
+                    name=format_driver_name(raw_name),
+                    trend=driver.get("direction", driver.get("trend", "stable")),
                     contribution=driver.get("contribution", 0.0)
                 ))
             elif isinstance(driver, (list, tuple)) and len(driver) >= 2:
                 risk_drivers.append(RiskDriver(
-                    name=str(driver[0]),
+                    name=format_driver_name(str(driver[0])),
                     trend="stable",
                     contribution=float(driver[1]) if len(driver) > 1 else 0.0
                 ))

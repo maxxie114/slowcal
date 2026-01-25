@@ -8,6 +8,35 @@ interface BusinessCardProps {
 }
 
 export function BusinessCard({ business }: BusinessCardProps) {
+    const generateFallback = (business: Business) => {
+        const emojiMap: Record<string,string> = {
+            restaurant: '🍽️',
+            cafe: '☕',
+            retail: '🛍️',
+            bookstore: '📚',
+            services: '🛠️',
+            grocery: '🥦',
+            other: '🏬'
+        };
+        const bgMap: Record<string,string> = {
+            restaurant: '#F97316',
+            cafe: '#EF4444',
+            retail: '#3B82F6',
+            bookstore: '#8B5CF6',
+            services: '#10B981',
+            grocery: '#F59E0B',
+            other: '#64748B'
+        };
+        const emoji = emojiMap[business.category] || '🏬';
+        const bg = bgMap[business.category] || '#64748B';
+        const label = (business.name || '').split(' ').slice(0,2).join(' ');
+        const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600' viewBox='0 0 800 600'>` +
+            `<rect width='100%' height='100%' fill='${bg}'/>` +
+            `<text x='50%' y='45%' text-anchor='middle' font-family='Inter, Arial, sans-serif' font-size='96' fill='#fff'>${emoji}</text>` +
+            `<text x='50%' y='85%' text-anchor='middle' font-family='Inter, Arial, sans-serif' font-size='26' fill='#fff'>${label}</text>` +
+            `</svg>`;
+        return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    };
     return (
         <Link href={`/business/${business.id}`} className="group flex flex-col gap-3 cursor-pointer">
             {/* Image Container */}
@@ -22,6 +51,13 @@ export function BusinessCard({ business }: BusinessCardProps) {
                     src={business.photoUrl}
                     alt={business.name}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    loading="lazy"
+                    decoding="async"
+                    onError={(e) => {
+                        const t = e.currentTarget as HTMLImageElement;
+                        t.onerror = null;
+                        t.src = generateFallback(business);
+                    }}
                 />
 
                 {/* Risk Badge (Overlay) */}

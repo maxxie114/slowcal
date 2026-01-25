@@ -110,17 +110,16 @@ export function FilterBar() {
 
                     <div className="relative group">
                         <select
-                        className="appearance-none bg-white border border-gray-300 rounded-full px-4 py-2 text-sm font-medium text-gray-700 hover:border-black cursor-pointer focus:outline-none transition-colors"
-                        value={currentRisk}
-                        onChange={(e) => handleRiskChange(e.target.value)}
-                    >
-                        <option value="">Any Risk</option>
-                        <option value="critical">Critical</option>
-                        <option value="high">High</option>
-                        <option value="moderate">Moderate</option>
-                        <option value="low">Low</option>
-                    </select>
-                </div>
+                            className="appearance-none bg-white border border-gray-300 rounded-full px-4 py-2 text-sm font-medium text-gray-700 hover:border-black cursor-pointer focus:outline-none transition-colors"
+                            value={currentRisk}
+                            onChange={(e) => handleRiskChange(e.target.value)}
+                        >
+                            <option value="">Any Risk</option>
+                            <option value="high">High</option>
+                            <option value="medium">Moderate</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
                 </div>
 
                 <button className="md:hidden p-3 border border-gray-300 rounded-full hover:bg-gray-50 bg-white">

@@ -31,6 +31,53 @@ function formatHorizon(horizon: string): string {
         .replace(/\b\w/g, char => char.toUpperCase());
 }
 
+// Map of technical terms to human-readable text
+const TERM_REPLACEMENTS: Record<string, string> = {
+    'age_risk_factor': 'business maturity',
+    'business_age_years': 'business age',
+    'permit_count_6m': 'recent permit activity',
+    'permit_count_3m': 'permit activity',
+    'permit_count_12m': 'annual permit activity',
+    'complaint_count_6m': 'complaint levels',
+    'complaint_count_3m': 'recent complaints',
+    'complaint_count_12m': 'annual complaints',
+    'incident_count_6m': 'neighborhood incidents',
+    'dbi_count_6m': 'building violations',
+    'eviction_rate_relative': 'eviction risk',
+    'vacancy_rate': 'vacancy levels',
+    'neighborhood_stress_level': 'neighborhood conditions',
+    'open_closed_ratio': 'complaint resolution rate',
+    'has_open_violations': 'open violations',
+    'permit_trend': 'permit trends',
+    'complaint_trend': 'complaint trends',
+    'incident_trend': 'incident trends',
+    'business_relevant_complaints_6m': 'business-related complaints',
+    'business_relevant_incidents_6m': 'business-related incidents',
+    '(up)': '(increasing)',
+    '(down)': '(decreasing)',
+    '(stable)': '',
+};
+
+// Clean up evidence reference codes and technical terms from text
+function cleanEvidenceRefs(text: string): string {
+    if (!text) return text;
+    
+    let cleaned = text
+        // Remove patterns like (e:something-###), [e:something-###], e:something-###
+        .replace(/\s*\(e:[a-zA-Z0-9_-]+\)/g, '')  // (e:ref)
+        .replace(/\s*\[e:[a-zA-Z0-9_-]+\]/g, '')  // [e:ref]
+        .replace(/\s*e:[a-zA-Z0-9_-]+/g, '');      // e:ref standalone
+    
+    // Replace technical terms with human-readable versions
+    for (const [term, replacement] of Object.entries(TERM_REPLACEMENTS)) {
+        cleaned = cleaned.replace(new RegExp(term.replace(/[()]/g, '\\$&'), 'gi'), replacement);
+    }
+    
+    return cleaned
+        .replace(/\s{2,}/g, ' ')  // Clean up double spaces
+        .trim();
+}
+
 // Group actions by horizon and convert to plan sections
 function convertActionsToSections(actions: StrategicAction[]): PlanSection[] {
     if (!actions || actions.length === 0) {
@@ -57,18 +104,18 @@ function convertActionsToSections(actions: StrategicAction[]): PlanSection[] {
         // Build action steps from all actions in this horizon
         const actionSteps = horizonActions.map((action, i) => ({
             step: i + 1,
-            text: action.action
+            text: cleanEvidenceRefs(action.action)
         }));
 
         // Build problem/context from all actions
         const problems = horizonActions
             .filter(a => a.why)
-            .map(a => a.why)
+            .map(a => cleanEvidenceRefs(a.why))
             .join(' ');
         
         const outcomes = horizonActions
             .filter(a => a.expected_outcome)
-            .map(a => `• ${a.expected_outcome}`)
+            .map(a => `• ${cleanEvidenceRefs(a.expected_outcome)}`)
             .join('\n');
 
         return {
@@ -78,8 +125,8 @@ function convertActionsToSections(actions: StrategicAction[]): PlanSection[] {
             icon: hasHigh ? AlertTriangle : hasMedium ? FileText : CheckCircle,
             onePager: {
                 title: `${formatHorizon(horizon)} Action Plan`,
-                problem: problems || "These areas require attention based on our risk analysis.",
-                context: `${horizonActions.length} action${horizonActions.length > 1 ? 's' : ''} identified for this timeframe.\n\nExpected Outcomes:\n${outcomes || 'Improved business resilience and reduced risk.'}`,
+                problem: cleanEvidenceRefs(problems) || "These areas require attention based on our risk analysis.",
+                context: `${horizonActions.length} action${horizonActions.length > 1 ? 's' : ''} identified for this timeframe. Expected Outcomes: ${cleanEvidenceRefs(outcomes) || 'Improved business resilience and reduced risk.'}`,
                 actionPlan: actionSteps.slice(0, 8), // Max 8 steps
                 resources: []
             }
