@@ -47,6 +47,10 @@ class ModelFeatures:
         "neighborhood_permits": "permit_count_6m",
         "avg_permit_cost": "avg_permit_cost_12m",
         "neighborhood_311_cases": "complaint_count_6m",
+        # New features from retrained model v2
+        "age_risk_factor": "age_risk_factor",
+        "neighborhood_health": "neighborhood_health",
+        "formality_score": "formality_score",
     }
     
     def to_array(self, feature_order: List[str]) -> List[float]:
@@ -125,6 +129,11 @@ class FeatureBuilderAgent:
         # Commercial corridor features
         "vacancy_rate_pct",
         "corridor_health",  # encoded 0-4
+        
+        # Derived features for model v2
+        "age_risk_factor",       # Binary: 1 if age 3-15 years (risky mid-age)
+        "neighborhood_health",   # permits - complaints*0.5 (log space)
+        "formality_score",       # Sum of has_naic + has_parking + has_transient
     ]
     
     @property
@@ -233,6 +242,26 @@ class FeatureBuilderAgent:
         features["vacancy_rate_pct"] = float(vacancy.get("vacancy_rate_pct", 0))
         features["corridor_health"] = self._encode_corridor_health(
             vacancy.get("corridor_health", "unknown")
+        )
+        
+        # Build derived features for model v2
+        import math
+        
+        # Age risk factor: 1 if mid-age business (3-15 years), else 0
+        age = features["business_age_years"]
+        features["age_risk_factor"] = 1.0 if 3 <= age <= 15 else 0.0
+        
+        # Neighborhood health: log(permits) - log(complaints)*0.5
+        # Higher = healthier neighborhood
+        permits_6m = max(1, features["permit_count_6m"])
+        complaints_6m = max(1, features["complaint_count_6m"])
+        features["neighborhood_health"] = math.log1p(permits_6m) - math.log1p(complaints_6m) * 0.5
+        
+        # Formality score: sum of formal business indicators
+        features["formality_score"] = (
+            features["has_naic_code"] + 
+            features["has_parking_tax"] + 
+            features["has_transient_tax"]
         )
         
         # Identify missing features

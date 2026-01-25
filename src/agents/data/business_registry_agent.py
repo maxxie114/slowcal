@@ -114,19 +114,34 @@ class BusinessRegistryAgent(BaseDataAgent):
     
     def _search_by_name(self, name: str) -> List[Dict[str, Any]]:
         """Search by business name or DBA"""
+        import re
+        
         # Extract potential address from the query (e.g., "SONA Fashions, 966 Grant Ave")
+        # Handle both comma-separated and space-separated formats
         parts = name.split(',')
         business_name = parts[0].strip().upper()
         address_part = parts[1].strip().upper() if len(parts) > 1 else None
         
+        # If no comma, try to detect address in the query (e.g., "SONA Fashions 966 Grant Ave")
+        # Look for pattern: number followed by words (street name)
+        if not address_part:
+            addr_match = re.search(r'(\d+\s+\w+(?:\s+\w+)?(?:\s+(?:st|ave|blvd|rd|dr|way|ct|ln|pl))?)', name, re.IGNORECASE)
+            if addr_match:
+                address_part = addr_match.group(1).upper()
+                # Remove address from business name
+                business_name = re.sub(r'\d+\s+\w+(?:\s+\w+)?(?:\s+(?:st|ave|blvd|rd|dr|way|ct|ln|pl))?', '', name, flags=re.IGNORECASE).strip().upper()
+        
         # Try to extract street number for more precise matching
-        import re
-        street_num_match = re.search(r'\b(\d+)\b', address_part or '')
+        street_num_match = re.search(r'\b(\d+)\b', address_part or name)
         street_num = street_num_match.group(1) if street_num_match else None
+        
+        # Extract first meaningful word from business name for search
+        name_words = [w for w in business_name.split() if len(w) >= 3]
+        first_word = name_words[0] if name_words else ''
         
         results = []
         
-        # Strategy 1: Search by address if we have a street number
+        # Strategy 1: Search by street number AND city (most precise)
         if street_num and address_part:
             soql = f"""$where=full_business_address like '%{street_num}%' AND city='San Francisco'&$order=location_start_date DESC&$limit=50"""
             try:
@@ -149,17 +164,29 @@ class BusinessRegistryAgent(BaseDataAgent):
             except Exception as e:
                 logger.warning(f"Address search failed: {e}")
         
-        # Strategy 2: Search by business name directly
+        # Strategy 2: Search by business name directly (case-insensitive)
         if not results:
             # Use first word of business name for LIKE search
             first_word = business_name.split()[0] if business_name else ''
             if first_word and len(first_word) >= 3:
-                soql = f"""$where=dba_name like '%{first_word}%' AND city='San Francisco'&$order=location_start_date DESC&$limit=20"""
+                # Use upper() for case-insensitive search
+                soql = f"""$where=upper(dba_name) like '%{first_word.upper()}%' AND city='San Francisco'&$order=location_start_date DESC&$limit=30"""
                 try:
                     result = self.client.query(self.dataset_id, soql, use_cache=False)
                     results.extend(result.data)
                 except Exception as e:
                     logger.warning(f"Name search failed: {e}")
+                    
+        # Strategy 3: Also search ownership_name if no results
+        if not results:
+            first_word = business_name.split()[0] if business_name else ''
+            if first_word and len(first_word) >= 3:
+                soql = f"""$where=upper(ownership_name) like '%{first_word.upper()}%' AND city='San Francisco'&$order=location_start_date DESC&$limit=30"""
+                try:
+                    result = self.client.query(self.dataset_id, soql, use_cache=False)
+                    results.extend(result.data)
+                except Exception as e:
+                    logger.warning(f"Ownership search failed: {e}")
         
         # Filter to only SF businesses and sort by match quality
         sf_results = [r for r in results if (r.get('city') or '').upper() in ('SAN FRANCISCO', 'SF')]

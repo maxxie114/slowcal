@@ -568,7 +568,23 @@ class CaseManagerAgent:
                         result_dict = result if isinstance(result, dict) else {}
 
                     # friendly debug count: try dataset-specific count keys
-                    record_count = result_dict.get('signals', result_dict).get(f'{task_name.split("_")[0]}_count_6m', 0)
+                    # Signals might be at top level or under 'signals' key
+                    signals_data = result_dict.get('signals', result_dict)
+                    if isinstance(signals_data, dict):
+                        # Try multiple key patterns for count
+                        prefix = task_name.split("_")[0]
+                        record_count = (
+                            signals_data.get(f'{prefix}_count_6m', 0) or
+                            signals_data.get(f'{prefix}_count_12m', 0) or
+                            signals_data.get('permit_count_6m', 0) or
+                            signals_data.get('complaint_count_6m', 0) or
+                            signals_data.get('incident_count_6m', 0) or
+                            signals_data.get('dbi_count_6m', 0) or
+                            len(signals_data.get('records', [])) or
+                            0
+                        )
+                    else:
+                        record_count = 0
                     debug_print(f"{task_name} returned (records/count: {record_count})", task_name, "receive")
 
                     signals[task_name] = result_dict

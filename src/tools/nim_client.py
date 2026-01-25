@@ -92,7 +92,7 @@ class NIMResponse:
                 return json.loads(fixed[start:end + 1])
         except json.JSONDecodeError:
             pass
-        
+        print(content)
         logger.warning(f"Failed to parse response as JSON. Content preview: {content[:200]}...")
         return None
 
