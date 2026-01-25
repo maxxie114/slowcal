@@ -38,6 +38,13 @@ class Config:
     STREAMLIT_TITLE = "SF Small Business Intelligence Platform"
     STREAMLIT_PAGE_ICON = "🏢"
     
+    # Agent Workflow settings
+    AGENT_SEARCH_QUERIES_COUNT = 5
+    AGENT_MAX_SOURCES_PER_QUERY = 10
+    AGENT_SCRAPE_DELAY_SECONDS = 2
+    AGENT_PAGE_TIMEOUT_SECONDS = 30
+    AGENT_MAX_CONTENT_LENGTH = 5000
+    
     @classmethod
     def ensure_directories(cls):
         """Create necessary directories if they don't exist"""
