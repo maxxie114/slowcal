@@ -1,13 +1,93 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, CheckCircle, AlertTriangle, FileText, ChevronRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowLeft, CheckCircle, AlertTriangle, FileText, ChevronRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { HandwrittenText } from "@/components/ui/LayoutComponents";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import { cn } from "@/lib/utils";
+import { AnalysisResult, StrategicAction } from "@/lib/api";
 
-const PLAN_SECTIONS = [
+interface PlanSection {
+    id: string;
+    title: string;
+    status: 'critical' | 'moderate' | 'completed';
+    icon: typeof AlertTriangle;
+    onePager: {
+        title: string;
+        problem: string;
+        context: string;
+        actionPlan: { step: number; text: string }[];
+        resources: string[];
+    };
+}
+
+// Format horizon string nicely
+function formatHorizon(horizon: string): string {
+    if (!horizon) return "Action Item";
+    // Replace underscores with spaces and capitalize first letter of each word
+    return horizon
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+// Group actions by horizon and convert to plan sections
+function convertActionsToSections(actions: StrategicAction[]): PlanSection[] {
+    if (!actions || actions.length === 0) {
+        return DEFAULT_SECTIONS;
+    }
+
+    // Group actions by horizon
+    const groupedByHorizon = actions.reduce((acc, action) => {
+        const horizon = action.horizon || 'Other';
+        if (!acc[horizon]) {
+            acc[horizon] = [];
+        }
+        acc[horizon].push(action);
+        return acc;
+    }, {} as Record<string, StrategicAction[]>);
+
+    // Convert grouped actions to sections
+    return Object.entries(groupedByHorizon).map(([horizon, horizonActions], idx) => {
+        // Determine overall status based on highest impact in the group
+        const hasHigh = horizonActions.some(a => a.impact === 'HIGH');
+        const hasMedium = horizonActions.some(a => a.impact === 'MEDIUM');
+        const status = hasHigh ? 'critical' as const : hasMedium ? 'moderate' as const : 'completed' as const;
+
+        // Build action steps from all actions in this horizon
+        const actionSteps = horizonActions.map((action, i) => ({
+            step: i + 1,
+            text: action.action
+        }));
+
+        // Build problem/context from all actions
+        const problems = horizonActions
+            .filter(a => a.why)
+            .map(a => a.why)
+            .join(' ');
+        
+        const outcomes = horizonActions
+            .filter(a => a.expected_outcome)
+            .map(a => `• ${a.expected_outcome}`)
+            .join('\n');
+
+        return {
+            id: `horizon-${idx}`,
+            title: formatHorizon(horizon),
+            status,
+            icon: hasHigh ? AlertTriangle : hasMedium ? FileText : CheckCircle,
+            onePager: {
+                title: `${formatHorizon(horizon)} Action Plan`,
+                problem: problems || "These areas require attention based on our risk analysis.",
+                context: `${horizonActions.length} action${horizonActions.length > 1 ? 's' : ''} identified for this timeframe.\n\nExpected Outcomes:\n${outcomes || 'Improved business resilience and reduced risk.'}`,
+                actionPlan: actionSteps.slice(0, 8), // Max 8 steps
+                resources: []
+            }
+        };
+    });
+}
+
+const DEFAULT_SECTIONS: PlanSection[] = [
     {
         id: "lease",
         title: "Commercial Lease",
@@ -61,7 +141,30 @@ const PLAN_SECTIONS = [
 ];
 
 export default function SurvivalPlanPage() {
-    const [activeSection, setActiveSection] = useState(PLAN_SECTIONS[0]);
+    const [sections, setSections] = useState<PlanSection[]>(DEFAULT_SECTIONS);
+    const [activeSection, setActiveSection] = useState<PlanSection>(DEFAULT_SECTIONS[0]);
+    const [businessName, setBusinessName] = useState<string>("Your Business");
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        // Load analysis result from sessionStorage
+        const stored = sessionStorage.getItem('analysisResult');
+        if (stored) {
+            try {
+                const result: AnalysisResult = JSON.parse(stored);
+                setBusinessName(result.business_name);
+                
+                if (result.actions && result.actions.length > 0) {
+                    const convertedSections = convertActionsToSections(result.actions);
+                    setSections(convertedSections);
+                    setActiveSection(convertedSections[0]);
+                }
+            } catch (e) {
+                console.error('Failed to parse stored analysis result:', e);
+            }
+        }
+        setLoading(false);
+    }, []);
 
     return (
         <main className="min-h-screen bg-[#F0F0EB] flex">
@@ -78,7 +181,7 @@ export default function SurvivalPlanPage() {
                 </div>
 
                 <nav className="flex-1 overflow-y-auto p-4 space-y-2">
-                    {PLAN_SECTIONS.map((section) => (
+                    {sections.map((section) => (
                         <button
                             key={section.id}
                             onClick={() => setActiveSection(section)}
@@ -115,12 +218,12 @@ export default function SurvivalPlanPage() {
 
                 <div className="p-6 border-t border-gray-200 bg-gray-50">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-bold font-mono">
-                            33%
+                        <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-bold font-mono text-sm">
+                            {sections.length}
                         </div>
                         <div className="text-xs text-gray-500">
-                            <p className="font-semibold text-gray-900">Plan Progress</p>
-                            <p>1 of 3 modules completed</p>
+                            <p className="font-semibold text-gray-900">{businessName}</p>
+                            <p>{sections.length} action items</p>
                         </div>
                     </div>
                 </div>
@@ -128,6 +231,11 @@ export default function SurvivalPlanPage() {
 
             {/* Main Content - The "One Pager" */}
             <div className="flex-1 p-8 md:p-12 overflow-y-auto bg-paper-pattern">
+                {loading ? (
+                    <div className="flex items-center justify-center h-full">
+                        <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                    </div>
+                ) : (
                 <div className="max-w-3xl mx-auto">
                     <div className="relative bg-[#FDFDF9] min-h-[800px] shadow-2xl p-12 md:p-16 rotate-[0.5deg]">
                         {/* Decorative elements */}
@@ -202,6 +310,7 @@ export default function SurvivalPlanPage() {
                         </div>
                     </div>
                 </div>
+                )}
             </div>
         </main>
     );

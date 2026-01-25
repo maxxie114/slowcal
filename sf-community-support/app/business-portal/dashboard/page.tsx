@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronUp, ShieldAlert, ArrowRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronDown, ChevronUp, ShieldAlert, ArrowRight, AlertCircle, MapPin, Building2, Calendar, FileText, Phone, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BusinessCard } from "@/components/directory/BusinessCard";
 import { TapeStrip } from "@/components/ui/TapeStrip";
 import Link from "next/link";
 import { HandwrittenText } from "@/components/ui/LayoutComponents";
+import { AnalysisResult } from "@/lib/api";
 
-// Mock Data for BusinessCard
+// Fallback mock data for when no real analysis exists
 const MOCK_BUSINESS_FULL = {
     id: "dashboard-demo",
     name: "The Daily Grind",
@@ -23,15 +24,57 @@ const MOCK_BUSINESS_FULL = {
     lng: -122.4243,
 };
 
-const RISK_FACTORS = [
-    { name: "Location Vacancy", value: 85, color: "bg-red-500", label: "Critical" },
-    { name: "Competition Density", value: 70, color: "bg-orange-500", label: "High" },
-    { name: "Rent to Income Ratio", value: 75, color: "bg-orange-500", label: "High" },
-    { name: "Foot Traffic Trend", value: 90, color: "bg-red-500", label: "Critical" },
-];
-
 export default function BusinessDashboardPage() {
     const [showRiskDetails, setShowRiskDetails] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+
+    useEffect(() => {
+        // Try to load analysis result from sessionStorage
+        const stored = sessionStorage.getItem('analysisResult');
+        if (stored) {
+            try {
+                setAnalysisResult(JSON.parse(stored));
+            } catch (e) {
+                console.error('Failed to parse stored analysis result:', e);
+            }
+        }
+    }, []);
+
+    // Use real data if available, otherwise fall back to mock
+    const businessData = analysisResult ? {
+        id: analysisResult.case_id || "analyzed-business",
+        name: analysisResult.business_name,
+        category: "other" as const,  // Default to 'other' which is a valid Category
+        neighborhood: analysisResult.neighborhood || "San Francisco",
+        riskLevel: analysisResult.risk_level?.toLowerCase() as "low" | "medium" | "high",
+        riskScore: Math.round(analysisResult.risk_score * 100),
+        photoUrl: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800",
+        tagline: `Business in ${analysisResult.neighborhood || "San Francisco"}`,
+        address: analysisResult.address,
+        lat: 37.7749,
+        lng: -122.4194,
+    } : MOCK_BUSINESS_FULL;
+
+    const riskLevel = analysisResult?.risk_level?.toUpperCase() || "HIGH";
+    const riskScore = analysisResult ? Math.round(analysisResult.risk_score * 100) : 78;
+    
+    const getRiskColor = (level: string) => {
+        switch (level) {
+            case 'HIGH': return 'text-red-500';
+            case 'MEDIUM': return 'text-orange-500';
+            case 'LOW': return 'text-green-500';
+            default: return 'text-gray-500';
+        }
+    };
+
+    const getRiskBgColor = (level: string) => {
+        switch (level) {
+            case 'HIGH': return 'bg-red-50 border-red-200';
+            case 'MEDIUM': return 'bg-orange-50 border-orange-200';
+            case 'LOW': return 'bg-green-50 border-green-200';
+            default: return 'bg-gray-50 border-gray-200';
+        }
+    };
 
     return (
         <main className="min-h-screen bg-[#FAFAFA] p-6 md:p-12 font-sans text-gray-900">
@@ -43,31 +86,59 @@ export default function BusinessDashboardPage() {
                         <HandwrittenText as="h1" className="text-4xl text-ink-dark mb-2">
                             Dashboard
                         </HandwrittenText>
-                        <p className="text-gray-500 font-light">Overview for {MOCK_BUSINESS_FULL.name}</p>
+                        <p className="text-gray-500 font-light">Overview for {businessData.name}</p>
                     </div>
                     <div className="text-right hidden md:block">
-                        <p className="text-xs font-mono text-gray-400 uppercase tracking-widest">Last updated: Just now</p>
+                        <p className="text-xs font-mono text-gray-400 uppercase tracking-widest">
+                            Last updated: {analysisResult ? new Date(analysisResult.analyzed_at).toLocaleString() : 'Just now'}
+                        </p>
                     </div>
                 </header>
 
+                {/* Data Source Stats - Only show if real data */}
+                {analysisResult && (
+                    <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4 text-center">
+                            <FileText className="w-6 h-6 text-blue-500 mx-auto mb-2" />
+                            <p className="text-2xl font-bold text-gray-900">{analysisResult.permit_count_6m}</p>
+                            <p className="text-xs text-gray-500">Permits (6mo radius)</p>
+                        </div>
+                        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4 text-center">
+                            <Phone className="w-6 h-6 text-orange-500 mx-auto mb-2" />
+                            <p className="text-2xl font-bold text-gray-900">{analysisResult.complaint_count_6m}</p>
+                            <p className="text-xs text-gray-500">311 Complaints</p>
+                        </div>
+                        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4 text-center">
+                            <Shield className="w-6 h-6 text-purple-500 mx-auto mb-2" />
+                            <p className="text-2xl font-bold text-gray-900">{analysisResult.incident_count_6m}</p>
+                            <p className="text-xs text-gray-500">SFPD Incidents</p>
+                        </div>
+                        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4 text-center">
+                            <MapPin className="w-6 h-6 text-green-500 mx-auto mb-2" />
+                            <p className="text-2xl font-bold text-gray-900">{Math.round(analysisResult.match_confidence * 100)}%</p>
+                            <p className="text-xs text-gray-500">Match Confidence</p>
+                        </div>
+                    </section>
+                )}
+
                 {/* Risk Section - Clean & Lean */}
-                <section className="bg-white rounded-lg border border-gray-100 shadow-sm p-6 md:p-8">
+                <section className={cn("bg-white rounded-lg border shadow-sm p-6 md:p-8", getRiskBgColor(riskLevel))}>
                     <div className="flex flex-col md:flex-row gap-8 items-start mb-6">
                         <div className="flex-1">
                             <h2 className="text-xl font-semibold flex items-center gap-2 mb-3 text-gray-900">
-                                <ShieldAlert className="w-5 h-5 text-risk-high" />
+                                <ShieldAlert className={cn("w-5 h-5", getRiskColor(riskLevel))} />
                                 Risk Assessment
                             </h2>
                             <p className="text-gray-600 leading-relaxed max-w-2xl">
-                                Your business is currently facing significant headwinds due to declining foot traffic in Hayes Valley and increased competition. 
-                                Immediate action on lease negotiation is recommended.
+                                {analysisResult?.strategy_summary || 
+                                 "Your business is currently facing significant headwinds. Immediate action on lease negotiation is recommended."}
                             </p>
                         </div>
                         
                         <div className="flex-shrink-0 w-full md:w-auto flex flex-col items-end gap-4">
                             <div className="text-right">
-                                <span className="block text-3xl font-bold text-risk-high">High Risk</span>
-                                <span className="text-sm text-gray-400">Score: 78/100</span>
+                                <span className={cn("block text-3xl font-bold", getRiskColor(riskLevel))}>{riskLevel} Risk</span>
+                                <span className="text-sm text-gray-400">Score: {riskScore}/100</span>
                             </div>
                             
                             <button 
@@ -82,63 +153,56 @@ export default function BusinessDashboardPage() {
 
                     {showRiskDetails && (
                         <div className="pt-6 border-t border-gray-100 animate-in fade-in slide-in-from-top-2">
-                             <div className="flex flex-col md:flex-row gap-8 md:gap-16">
-                                {/* Left Column Risks */}
-                                <div className="flex-1 space-y-4">
-                                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">External Factors</h3>
-                                    {[
-                                        { name: "Location Vacancy", value: 85, color: "bg-red-500", label: "Critical" },
-                                        { name: "Competition Density", value: 70, color: "bg-orange-500", label: "High" },
-                                        { name: "Market Trend", value: 60, color: "bg-yellow-500", label: "Moderate" },
-                                        { name: "Area Foot Traffic", value: 90, color: "bg-red-500", label: "Critical" },
-                                        { name: "Economic Shift", value: 45, color: "bg-green-500", label: "Low" }
-                                    ].map((factor) => (
-                                        <div key={factor.name} className="space-y-1">
-                                            <div className="flex justify-between text-xs font-medium text-gray-600">
-                                                <span>{factor.name}</span>
+                            {analysisResult?.risk_drivers && analysisResult.risk_drivers.length > 0 ? (
+                                <div className="space-y-4">
+                                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Risk Drivers</h3>
+                                    {analysisResult.risk_drivers.map((driver) => (
+                                        <div key={driver.name} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-100">
+                                            <div className="flex items-center gap-3">
                                                 <span className={cn(
-                                                    "px-1.5 py-0.5 rounded text-[10px] uppercase font-bold text-white", 
-                                                    factor.color
-                                                )}>{factor.label}</span>
+                                                    "text-lg",
+                                                    driver.trend === 'up' ? "text-red-500" : 
+                                                    driver.trend === 'down' ? "text-green-500" : "text-gray-400"
+                                                )}>
+                                                    {driver.trend === 'up' ? '↑' : driver.trend === 'down' ? '↓' : '→'}
+                                                </span>
+                                                <span className="font-medium text-gray-700">{driver.name}</span>
                                             </div>
-                                            <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                                                <div 
-                                                    className={cn("h-full rounded-full transition-all duration-1000", factor.color)} 
-                                                    style={{ width: `${factor.value}%` }} 
-                                                />
-                                            </div>
+                                            <span className="text-sm text-gray-500">{Math.round(driver.contribution * 100)}% contribution</span>
                                         </div>
                                     ))}
                                 </div>
-
-                                {/* Right Column Risks */}
-                                <div className="flex-1 space-y-4">
-                                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Internal Factors</h3>
-                                    {[
-                                        { name: "Rent to Income", value: 75, color: "bg-orange-500", label: "High" },
-                                        { name: "Digital Presence", value: 30, color: "bg-green-500", label: "Stable" },
-                                        { name: "Customer Retention", value: 55, color: "bg-yellow-500", label: "Moderate" },
-                                        { name: "Staff Turnover", value: 40, color: "bg-green-500", label: "Stable" },
-                                        { name: "Cash Flow", value: 65, color: "bg-yellow-500", label: "Moderate" }
-                                    ].map((factor) => (
-                                        <div key={factor.name} className="space-y-1">
-                                            <div className="flex justify-between text-xs font-medium text-gray-600">
-                                                <span>{factor.name}</span>
-                                                <span className={cn(
-                                                    "px-1.5 py-0.5 rounded text-[10px] uppercase font-bold text-white", 
-                                                    factor.color
-                                                )}>{factor.label}</span>
+                            ) : (
+                                <div className="flex flex-col md:flex-row gap-8 md:gap-16">
+                                    {/* Default risk factors if none from API */}
+                                    <div className="flex-1 space-y-4">
+                                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">External Factors</h3>
+                                        {[
+                                            { name: "Location Vacancy", value: 85, color: "bg-red-500", label: "Critical" },
+                                            { name: "Competition Density", value: 70, color: "bg-orange-500", label: "High" },
+                                            { name: "Market Trend", value: 60, color: "bg-yellow-500", label: "Moderate" },
+                                            { name: "Area Foot Traffic", value: 90, color: "bg-red-500", label: "Critical" },
+                                            { name: "Economic Shift", value: 45, color: "bg-green-500", label: "Low" }
+                                        ].map((factor) => (
+                                            <div key={factor.name} className="space-y-1">
+                                                <div className="flex justify-between text-xs font-medium text-gray-600">
+                                                    <span>{factor.name}</span>
+                                                    <span className={cn(
+                                                        "px-1.5 py-0.5 rounded text-[10px] uppercase font-bold text-white", 
+                                                        factor.color
+                                                    )}>{factor.label}</span>
+                                                </div>
+                                                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                                                    <div 
+                                                        className={cn("h-full rounded-full transition-all duration-1000", factor.color)} 
+                                                        style={{ width: `${factor.value}%` }} 
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                                                <div 
-                                                    className={cn("h-full rounded-full transition-all duration-1000", factor.color)} 
-                                                    style={{ width: `${factor.value}%` }} 
-                                                />
-                                            </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
-                             </div>
+                            )}
                         </div>
                     )}
                 </section>
@@ -150,7 +214,7 @@ export default function BusinessDashboardPage() {
                     <div className="space-y-4">
                          <h3 className="font-serif italic text-xl text-gray-400 ml-2">Your Profile</h3>
                          <div className="max-w-md mx-auto lg:mx-0 w-full transform transition-all hover:-rotate-1">
-                            <BusinessCard business={MOCK_BUSINESS_FULL} />
+                            <BusinessCard business={businessData} />
                          </div>
                     </div>
 
@@ -175,30 +239,58 @@ export default function BusinessDashboardPage() {
                                     </HandwrittenText>
 
                                     <p className="font-serif text-lg text-ink-medium italic mb-8 max-w-xs leading-relaxed">
-                                        "A step-by-step guide to saving The Daily Grind and bringing the community back."
+                                        "A step-by-step guide to helping {businessData.name} thrive."
                                     </p>
 
                                     <div className="w-full h-px bg-gray-200 mb-8" />
 
                                     <div className="space-y-4 w-full max-w-xs text-left mx-auto flex-1">
-                                        <div className="flex items-center gap-3 text-ink-medium">
-                                            <div className="w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center">
-                                                <div className="w-2 h-2 bg-transparent rounded-full" />
-                                            </div>
-                                            <span className="font-sans text-sm line-through text-gray-400">Initial Assessment</span>
-                                        </div>
-                                        <div className="flex items-center gap-3 text-ink-dark font-medium">
-                                            <div className="w-4 h-4 rounded-full border border-risk-high flex items-center justify-center">
-                                                <div className="w-2 h-2 bg-risk-high rounded-full animate-pulse" />
-                                            </div>
-                                            <span className="font-sans text-sm">Lease Negotiation</span>
-                                        </div>
-                                        <div className="flex items-center gap-3 text-ink-medium">
-                                            <div className="w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center">
-                                                <div className="w-2 h-2 bg-transparent rounded-full" />
-                                            </div>
-                                            <span className="font-sans text-sm">Community Outreach</span>
-                                        </div>
+                                        {analysisResult?.actions && analysisResult.actions.length > 0 ? (
+                                            // Show real actions from API
+                                            analysisResult.actions.slice(0, 3).map((action, idx) => (
+                                                <div key={idx} className="flex items-center gap-3 text-ink-dark">
+                                                    <div className={cn(
+                                                        "w-4 h-4 rounded-full border flex items-center justify-center",
+                                                        action.impact === 'HIGH' ? "border-risk-high" : 
+                                                        action.impact === 'MEDIUM' ? "border-orange-400" : "border-green-500"
+                                                    )}>
+                                                        <div className={cn(
+                                                            "w-2 h-2 rounded-full",
+                                                            action.impact === 'HIGH' ? "bg-risk-high animate-pulse" : 
+                                                            action.impact === 'MEDIUM' ? "bg-orange-400" : "bg-green-500"
+                                                        )} />
+                                                    </div>
+                                                    <span className="font-sans text-sm truncate">{action.action}</span>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            // Fallback static items
+                                            <>
+                                                <div className="flex items-center gap-3 text-ink-medium">
+                                                    <div className="w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center">
+                                                        <div className="w-2 h-2 bg-transparent rounded-full" />
+                                                    </div>
+                                                    <span className="font-sans text-sm line-through text-gray-400">Initial Assessment</span>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-ink-dark font-medium">
+                                                    <div className="w-4 h-4 rounded-full border border-risk-high flex items-center justify-center">
+                                                        <div className="w-2 h-2 bg-risk-high rounded-full animate-pulse" />
+                                                    </div>
+                                                    <span className="font-sans text-sm">Lease Negotiation</span>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-ink-medium">
+                                                    <div className="w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center">
+                                                        <div className="w-2 h-2 bg-transparent rounded-full" />
+                                                    </div>
+                                                    <span className="font-sans text-sm">Community Outreach</span>
+                                                </div>
+                                            </>
+                                        )}
+                                        {analysisResult?.actions && analysisResult.actions.length > 3 && (
+                                            <p className="text-xs text-gray-400 italic mt-2">
+                                                +{analysisResult.actions.length - 3} more actions...
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="mt-8 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-ink-dark group-hover:gap-4 transition-all">
