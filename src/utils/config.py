@@ -4,6 +4,10 @@ Configuration management
 
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+load_dotenv()
 
 class Config:
     """Configuration settings for the SF Business Intelligence Platform"""
