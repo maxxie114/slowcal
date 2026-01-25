@@ -13,9 +13,12 @@ class NemotronClient:
     """Client for interacting with Nemotron LLM via NVIDIA API"""
     
     def __init__(self, base_url=None, api_key=None, model=None):
-        self.base_url = base_url or "https://integrate.api.nvidia.com/v1"
-        self.api_key = api_key or "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"
-        self.model = model or "nvidia/nemotron-3-nano-30b-a3b"
+        self.base_url = base_url or Config.NEMOTRON_BASE_URL
+        self.api_key = api_key or Config.NEMOTRON_API_KEY
+        self.model = model or Config.NEMOTRON_MODEL
+        
+        if not self.api_key:
+            raise ValueError("NEMOTRON_API_KEY environment variable must be set. Please set it in your .env file or environment. See .env.example for reference.")
         
         self.client = OpenAI(
             base_url=self.base_url,

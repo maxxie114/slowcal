@@ -20,9 +20,9 @@ class Config:
     SF_DATA_APP_TOKEN = os.getenv("SF_DATA_APP_TOKEN", "")
     
     # Nemotron/OpenAI Configuration
-    NEMOTRON_BASE_URL = os.getenv("NEMOTRON_BASE_URL", "http://localhost:8000/v1")
-    NEMOTRON_API_KEY = os.getenv("NEMOTRON_API_KEY", "local-nemotron-key")
-    NEMOTRON_MODEL = os.getenv("NEMOTRON_MODEL", "nvidia/nemotron-4-340b-instruct")
+    NEMOTRON_BASE_URL = os.getenv("NEMOTRON_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    NEMOTRON_API_KEY = os.getenv("NEMOTRON_API_KEY", "")
+    NEMOTRON_MODEL = os.getenv("NEMOTRON_MODEL", "nvidia/nemotron-3-nano-30b-a3b")
     
     # Data sources
     BUSINESS_LICENSE_DATASET = "rqzj-sfat"  # SF Business Registry

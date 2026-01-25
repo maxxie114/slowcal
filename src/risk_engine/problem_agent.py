@@ -142,24 +142,17 @@ class BusinessProblemAgent:
         industry = profile.get("industry", "")
         location = profile.get("location", "San Francisco")
         
-        prompt = f"""Generate 5 specific Google search queries to find news articles, reports, and discussions about why businesses in San Francisco are closing, specifically related to this business profile:
+        prompt = f"""Generate 5 Google search queries for SF business closures related to:
 
-Business Profile:
-- Industry: {industry}
-- Location: {location}
-- Risk Factors: {', '.join(risk_factors)}
-- Business Age: {profile.get('business_age_years', 'unknown')} years
-- Violations: {profile.get('total_violations', 0)}
+Industry: {industry}
+Location: {location}
+Risk factors: {', '.join(risk_factors)}
 
-Focus on finding:
-1. News articles about SF business closures
-2. Industry reports on business failures
-3. Reddit discussions about business challenges
-4. Specific problems that can be addressed with city help (homelessness, noise, permits, etc.)
+Focus: News, reports, Reddit discussions about city-fixable problems (homelessness, noise, permits).
 
-Generate exactly 5 search queries, one per line, without numbering or bullets."""
+Output: 5 queries, one per line, no numbering."""
 
-        system_prompt = """You are an expert at generating effective web search queries. Generate specific, targeted queries that will find relevant information about business closures and problems in San Francisco."""
+        system_prompt = """Generate concise search queries for SF business closure problems."""
 
         response = self.client.generate(prompt, system_prompt=system_prompt, temperature=0.8, max_tokens=500)
         
@@ -328,41 +321,34 @@ Generate exactly 5 search queries, one per line, without numbering or bullets.""
             for item in scraped_content[:20]  # Limit to top 20 sources
         ])
         
-        prompt = f"""Analyze the following scraped content about San Francisco business closures and extract specific problems that businesses face. Focus on problems that can be addressed with help from San Francisco city departments.
+        prompt = f"""Extract city-fixable problems from SF business closure content. Keep descriptions SHORT (1-2 sentences max).
 
-Business Profile:
-- Industry: {profile.get('industry', 'unknown')}
-- Location: {profile.get('location', 'San Francisco')}
-- Risk Factors: {', '.join(profile.get('risk_factors', []))}
+Business: {profile.get('industry', 'unknown')} in {profile.get('location', 'SF')}
+Risk factors: {', '.join(profile.get('risk_factors', []))}
 
-Scraped Content:
-{content_summary}
+Content:
+{content_summary[:2000]}
 
-Extract specific problems that:
-1. Are mentioned in the content
-2. Can be fixed with help from SF city departments (homelessness, noise pollution, parking, permits, code enforcement, public safety, etc.)
-3. Are relevant to the business profile
+Extract problems that SF city departments can fix. For each:
+- Problem name (brief)
+- Severity: high/medium/low
+- Department that can help
+- City code if mentioned
 
-For each problem, identify:
-- The specific problem description
-- Severity (high/medium/low)
-- Which SF city department can help
-- Relevant SF municipal codes if mentioned
-
-Format as JSON array with this structure:
+JSON format:
 [
   {{
-    "problem": "Specific problem description",
+    "problem": "Brief problem name",
     "severity": "high|medium|low",
-    "description": "Detailed description from sources",
-    "sources": ["URL1", "URL2"],
+    "description": "1-2 sentence description",
+    "sources": ["URL1"],
     "city_fixable": true,
     "city_department": "Department name",
-    "city_code": "SF Municipal Code reference if available"
+    "city_code": "Code if available"
   }}
 ]"""
 
-        system_prompt = """You are an expert at analyzing business problems and identifying city-fixable issues. Extract specific, actionable problems that San Francisco city departments can address."""
+        system_prompt = """Extract brief, city-fixable business problems. Keep descriptions short."""
 
         response = self.client.generate_structured(
             prompt,
@@ -399,45 +385,38 @@ Format as JSON array with this structure:
             if not problem.get("city_fixable", False):
                 continue
             
-            prompt = f"""Generate actionable solutions for this business problem in San Francisco:
+            prompt = f"""Generate SHORT, actionable solutions for this SF business problem:
 
 Problem: {problem.get('problem', '')}
-Description: {problem.get('description', '')}
-City Department: {problem.get('city_department', '')}
-City Code: {problem.get('city_code', 'N/A')}
+Department: {problem.get('city_department', '')}
 
-Business Profile:
-- Industry: {risk_input.get('profile', {}).get('industry', '')}
-- Location: {risk_input.get('profile', {}).get('location', 'San Francisco')}
+Keep solutions BRIEF:
+- Action: One sentence
+- Steps: 3-4 bullet points max (short)
+- Contact: Phone/website only
+- Timeline: Brief estimate
 
-Generate specific, actionable solutions that include:
-1. What action the business owner should take
-2. Step-by-step instructions
-3. How to contact the relevant SF city department
-4. Expected timeline for resolution
-5. Any relevant SF municipal codes or regulations
-
-Format as JSON:
+JSON:
 {{
-  "problem": "Problem description",
-  "severity": "high|medium|low",
-  "description": "Detailed description",
-  "sources": ["URL1"],
+  "problem": "{problem.get('problem', '')}",
+  "severity": "{problem.get('severity', 'high')}",
+  "description": "{problem.get('description', '')[:100]}",
+  "sources": {problem.get('sources', [])},
   "city_fixable": true,
-  "city_department": "Department name",
-  "city_code": "SF Municipal Code reference",
+  "city_department": "{problem.get('city_department', '')}",
+  "city_code": "{problem.get('city_code', 'N/A')}",
   "solutions": [
     {{
-      "action": "Specific action to take",
-      "steps": ["Step 1", "Step 2", "Step 3"],
-      "contact": "How to contact (phone, website, etc.)",
-      "expected_timeline": "Expected resolution time",
-      "city_resource": "Specific city resource or program"
+      "action": "One sentence action",
+      "steps": ["Brief step 1", "Brief step 2", "Brief step 3"],
+      "contact": "Phone or website",
+      "expected_timeline": "Brief timeline",
+      "city_resource": "Resource name"
     }}
   ]
 }}"""
 
-            system_prompt = """You are an expert advisor on San Francisco city services and business support. Provide specific, actionable solutions with exact contact information and steps."""
+            system_prompt = """Generate brief, actionable solutions with contact info. Keep steps short (3-4 bullets max)."""
 
             response = self.client.generate_structured(
                 prompt,
@@ -475,20 +454,19 @@ Format as JSON:
             for p in solutions
         ])
         
-        prompt = f"""Generate a concise executive summary (2-3 paragraphs) for a business owner facing these problems:
+        prompt = f"""Generate a SHORT summary (3-4 bullets max) for a business owner:
 
-Risk Profile: {risk_input.get('risk_message', '')}
+Risk: {risk_input.get('risk_message', '')[:100]}
 
-Identified Problems:
+Problems found:
 {problems_summary}
 
-The summary should:
-1. Acknowledge the business risk
-2. Highlight the most critical problems
-3. Emphasize that these problems can be addressed with city help
-4. Provide hope and actionable next steps"""
+Format as bullet points:
+• Brief risk acknowledgment
+• Top 2-3 critical problems (one line each)
+• Key action to take"""
 
-        system_prompt = """You are a business advisor providing clear, encouraging guidance to small business owners in San Francisco."""
+        system_prompt = """Generate a brief bullet-point summary (3-4 bullets max)."""
 
         summary = self.client.generate(prompt, system_prompt=system_prompt, temperature=0.7, max_tokens=500)
         
