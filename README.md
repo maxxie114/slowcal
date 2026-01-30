@@ -1,6 +1,6 @@
 # San Francisco Small Business Intelligence Platform
 
-A comprehensive hackathon project providing AI-powered intelligence for small businesses in San Francisco. The platform includes three main features: Risk Prediction Engine, Lease Negotiation Intelligence, and City Fee Analysis.
+A comprehensive hackathon project providing AI-powered intelligence for small businesses in San Francisco. The platform includes three main features: Risk Prediction Engine, Lease Negotiation Intelligence, and City Fee Analysis. This project aims to empower local entrepreneurs with data-driven insights.
 
 ## 🎯 Features
 
@@ -181,6 +181,10 @@ This project is created for hackathon purposes.
 - SF.gov Open Data for providing public datasets
 - Nvidia for Nemotron LLM
 - Streamlit for the UI framework
+
+## 👥 Contributors
+
+- [abhinabch](https://github.com/abhinabch)
 
 ## 🔮 Future Enhancements
 
