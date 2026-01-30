@@ -182,10 +182,6 @@ This project is created for hackathon purposes.
 - Nvidia for Nemotron LLM
 - Streamlit for the UI framework
 
-## 👥 Contributors
-
-- [abhinabch](https://github.com/abhinabch)
-
 ## 🔮 Future Enhancements
 
 - Real-time data updates
